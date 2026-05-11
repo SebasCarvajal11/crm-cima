@@ -9,7 +9,7 @@
   --card-foreground: #000000;
   --popover: #ffffff;
   --popover-foreground: #000000;
-  --primary: #ff3333;
+  --primary: #8F2B2E;
   --primary-foreground: #ffffff;
   --secondary: #ffff00;
   --secondary-foreground: #000000;
@@ -21,20 +21,20 @@
   --destructive-foreground: #ffffff;
   --border: #000000;
   --input: #000000;
-  --ring: #ff3333;
-  --chart-1: #ff3333;
+  --ring: #8F2B2E;
+  --chart-1: #8F2B2E;
   --chart-2: #ffff00;
   --chart-3: #0066ff;
   --chart-4: #00cc00;
   --chart-5: #cc00cc;
   --sidebar: #f0f0f0;
   --sidebar-foreground: #000000;
-  --sidebar-primary: #ff3333;
+  --sidebar-primary: #8F2B2E;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #0066ff;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #000000;
-  --sidebar-ring: #ff3333;
+  --sidebar-ring: #8F2B2E;
   --font-sans: DM Sans, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: Space Mono, monospace;
@@ -167,6 +167,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }

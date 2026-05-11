@@ -13,7 +13,7 @@ import { ChatPanel } from './chat-panel'
 import { ProjectFiles } from './project-files'
 import { BriefPanel } from './brief-panel'
 import { ProjectMembers } from './project-members'
-import type { Project, ProjectListItem, ProjectMember, ProjectTask } from '@/collab/collab.types'
+import type { Project, ProjectListItem, ProjectTask } from '@/collab/collab.types'
 import type { MeResponse } from '@/auth/auth.types'
 
 type WorkspaceTab = 'board' | 'chat' | 'files' | 'brief' | 'members'
@@ -85,7 +85,6 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
     onError: (e) => parseApiError(e).then((m) => setErrorMsg(m || 'No se pudo mover la tarea')),
   })
 
-  const type   = project?.type ? { bg: '', text: '' } : null
   const status = project?.status ? PARENT_COLUMNS.find((c) => c.key === project.status) : null
   const pct    = project?.progressPercent ?? 0
 

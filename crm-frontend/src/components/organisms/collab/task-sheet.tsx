@@ -440,7 +440,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               <Separator />
               <div className="flex gap-2">
                 <Button className="flex-1" disabled={editTitle.trim().length < 2 || save.isPending}
-                  onClick={() => save.mutate()}>
+                  onClick={() => save.mutate(undefined)}>
                   {save.isPending ? 'Guardando…' : 'Guardar cambios'}
                 </Button>
                 <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>

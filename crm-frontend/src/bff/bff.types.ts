@@ -7,6 +7,7 @@ export type DashboardBffResponse = {
     email: string
     role: UserRole
     id: string
+    emailVerifiedAt: string | null
     force_password_change?: boolean
   }
   projects: {

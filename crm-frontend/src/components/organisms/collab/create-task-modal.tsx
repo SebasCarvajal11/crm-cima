@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckSquare, ChevronDown, Lock, Plus, Trash2, User } from 'lucide-react'
+import { CheckSquare, Lock, Plus, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -35,7 +35,7 @@ type Props = {
 
 /** Organismo: modal completo para crear una nueva tarea con asignacion de trabajadores y subtareas. */
 export function CreateTaskModal({
-  accessToken, projectId, columns, tasksByColumn, identity, members,
+  accessToken, projectId, columns, tasksByColumn, identity,
   open, onClose, onCreated, onError,
 }: Props) {
   const queryClient = useQueryClient()

@@ -1,0 +1,13 @@
+export const collabKeys = {
+  all: ['collab'] as const,
+  projects: () => [...collabKeys.all, 'projects'] as const,
+  projectWorkspace: (projectId: string) => [...collabKeys.all, 'project-workspace', projectId] as const,
+  chatExternal: (projectId: string) => [...collabKeys.all, 'chat', 'external', projectId] as const,
+  chatInternal: (projectId: string) => [...collabKeys.all, 'chat', 'internal', projectId] as const,
+  brief: (projectId: string) => [...collabKeys.all, 'brief', projectId] as const,
+  files: (projectId: string) => [...collabKeys.all, 'files', projectId] as const,
+  changeLog: (projectId: string) => [...collabKeys.all, 'change-log', projectId] as const,
+  taskComments: (taskId: string) => [...collabKeys.all, 'task-comments', taskId] as const,
+  taskFiles: (taskId: string) => [...collabKeys.all, 'task-files', taskId] as const,
+  taskAssignees: (taskId: string) => [...collabKeys.all, 'task-assignees', taskId] as const,
+}

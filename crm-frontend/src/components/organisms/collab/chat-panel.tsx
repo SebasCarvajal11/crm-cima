@@ -25,6 +25,7 @@ type Props = {
   identity: MeResponse['data']
   isClient: boolean
   initialChannel?: Channel
+  initialMessageId?: string
   members: ProjectMember[]
   onError: (msg: string) => void
 }
@@ -63,37 +64,45 @@ const getAuthorTag = (msg: ProjectChatMessage): string => {
 
 const formatMessageTime = (iso: string): string => {
   const date = new Date(iso)
-  const now = new Date()
-  const isToday = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
-  if (isToday) return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false })
-  const isThisYear = date.getFullYear() === now.getFullYear()
-  const dateStr = date.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(isThisYear ? {} : { year: 'numeric' }) })
+  const dateStr = date.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })
   const timeStr = date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false })
   return `${dateStr}, ${timeStr}`
 }
 
-const isSameBlock = (a: ProjectChatMessage, b: ProjectChatMessage): boolean => {
-  if (a.authorSub !== b.authorSub) return false
-  return Math.abs(new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) < 3 * 60 * 1000
+const isSameDay = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+
+const startOfDay = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const formatDaySeparator = (iso: string): string => {
+  const date = new Date(iso)
+  const today = startOfDay(new Date())
+  const messageDay = startOfDay(date)
+  const diffDays = Math.round((today.getTime() - messageDay.getTime()) / (24 * 60 * 60 * 1000))
+  if (diffDays === 0) return 'Hoy'
+  if (diffDays === 1) return 'Ayer'
+  return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-export function ChatPanel({ accessToken, projectId, identity, isClient, initialChannel, members, onError }: Props) {
+export function ChatPanel({ accessToken, projectId, identity, isClient, initialChannel, initialMessageId, members, onError }: Props) {
   const queryClient = useQueryClient()
   const [channel, setChannel] = useState<Channel>(initialChannel ?? 'external')
   const [body, setBody] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const externalQ = useQuery({
     queryKey: collabKeys.chatExternal(projectId),
     queryFn: () => listExternalChatRequest(accessToken, projectId),
-    enabled: channel === 'external',
+    staleTime: 15_000,
   })
   const internalQ = useQuery({
     queryKey: collabKeys.chatInternal(projectId),
     queryFn: () => listInternalChatRequest(accessToken, projectId),
-    enabled: !isClient && channel === 'internal',
+    enabled: !isClient,
+    staleTime: 15_000,
   })
   const messages = channel === 'external' ? (externalQ.data?.data ?? []) : (internalQ.data?.data ?? [])
 
@@ -103,6 +112,16 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length])
   useEffect(() => { setActiveIdx(0) }, [mentionQuery?.query, mentionSuggestions.length])
   useEffect(() => { if (initialChannel) setChannel(initialChannel) }, [initialChannel])
+  useEffect(() => { setHighlightMessageId(initialMessageId ?? null) }, [initialMessageId])
+
+  useEffect(() => {
+    if (!highlightMessageId || messages.length === 0) return
+    const node = document.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`)
+    if (!node) return
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const timer = window.setTimeout(() => setHighlightMessageId((current) => (current === highlightMessageId ? null : current)), 2200)
+    return () => window.clearTimeout(timer)
+  }, [highlightMessageId, messages])
 
   useEffect(() => {
     if (!messages.length) return
@@ -172,22 +191,25 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
         ) : messages.map((msg, i) => {
           const isOwn = msg.authorSub === identity.id
           const isSystem = msg.messageType !== 'text'
-          const prevMsg = i > 0 ? messages[i - 1] : null
-          const nextMsg = i < messages.length - 1 ? messages[i + 1] : null
-          const isFirst = !prevMsg || !isSameBlock(prevMsg, msg)
-          const isLast = !nextMsg || !isSameBlock(msg, nextMsg)
+          const prev = i > 0 ? messages[i - 1] : null
+          const showDaySeparator = !prev || !isSameDay(new Date(prev.createdAt), new Date(msg.createdAt))
           if (isSystem) return <div key={msg.id} className="flex justify-center py-2"><span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/60 border rounded-full px-3 py-1"><MessageSquare className="size-3 shrink-0" />{msg.body}<span className="opacity-60 ml-1">{formatMessageTime(msg.createdAt)}</span></span></div>
           return (
-            <div key={msg.id} className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} ${isLast ? 'mb-3' : 'mb-0.5'}`}>
-              {!isOwn && <div className={`shrink-0 size-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold select-none ${getAvatarColor(msg.authorSub)} ${isLast ? 'opacity-100' : 'opacity-0'}`} aria-hidden={!isLast} title={msg.authorEmail ?? undefined}>{getInitials(msg)}</div>}
-              <div className={`flex flex-col max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                {!isOwn && isFirst && (
+            <div key={msg.id}>
+              {showDaySeparator && (
+                <div className="flex items-center gap-2 my-3">
+                  <div className="h-px bg-border flex-1" />
+                  <span className="text-[11px] text-muted-foreground capitalize">{formatDaySeparator(msg.createdAt)}</span>
+                  <div className="h-px bg-border flex-1" />
+                </div>
+              )}
+              <div data-message-id={msg.id} className={`flex items-end gap-2 mb-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'} ${highlightMessageId === msg.id ? 'rounded-lg bg-amber-100/60 px-1 py-1 dark:bg-amber-300/15' : ''}`}>
+                {!isOwn && <div className={`shrink-0 size-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold select-none ${getAvatarColor(msg.authorSub)}`} title={msg.authorEmail ?? undefined}>{getInitials(msg)}</div>}
+                <div className={`flex flex-col max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
                   <span className="text-[11px] font-semibold text-muted-foreground px-3 mb-0.5">
                     {getDisplayName(msg)} · {getAuthorTag(msg)}
                   </span>
-                )}
-                <div className={`px-3.5 py-2 shadow-sm text-sm leading-relaxed break-words ${isOwn ? `bg-primary text-primary-foreground ${isFirst ? 'rounded-t-2xl' : 'rounded-t-md'} rounded-bl-2xl rounded-br-sm` : `bg-muted ${isFirst ? 'rounded-t-2xl' : 'rounded-t-md'} rounded-br-2xl rounded-bl-sm`}`}>{msg.body}</div>
-                {isLast && (
+                  <div className={`px-3.5 py-2 shadow-sm text-sm leading-relaxed break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-t-2xl rounded-bl-2xl rounded-br-sm' : 'bg-muted rounded-t-2xl rounded-br-2xl rounded-bl-sm'}`}>{msg.body}</div>
                   <span className="text-[10px] text-muted-foreground px-1 mt-1 inline-flex items-center gap-1">
                     {formatMessageTime(msg.createdAt)}
                     {isOwn && (
@@ -196,7 +218,7 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
                         : <Check className="size-3 text-muted-foreground" />
                     )}
                   </span>
-                )}
+                </div>
               </div>
             </div>
           )

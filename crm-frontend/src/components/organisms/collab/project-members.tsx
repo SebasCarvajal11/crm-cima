@@ -1,29 +1,42 @@
-import { Crown, Briefcase, User, CheckSquare2, Users } from 'lucide-react'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Briefcase, CheckSquare2, Clock3, Crown, Mail, Plus, User, Users } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { UserSearch } from '@/components/molecules/user-search'
+import { UserChip } from '@/components/molecules/user-chip'
+import { parseApiError } from '@/auth/parse-api-error'
+import { listProjectMembersRequest, upsertProjectMemberRequest } from '@/collab/collab-api'
+import { collabKeys } from '@/collab/query-keys'
 import type { ProjectMember, ProjectMemberRole } from '@/collab/collab.types'
+import type { ClientSearchResult } from '@/auth/auth-api'
 
 type Props = {
   members: ProjectMember[]
   isLoading: boolean
+  accessToken: string
+  projectId: string
+  canManageMembers: boolean
+  onError: (msg: string) => void
 }
 
-const ROLE_CONFIG: Record<ProjectMemberRole, {
-  label: string
-  labelPlural: string
-  icon: React.ReactNode
-  badgeClass: string
-  cardClass: string
-}> = {
+const ROLE_CONFIG: Record<ProjectMemberRole, { label: string; icon: React.ReactNode; badgeClass: string; cardClass: string }> = {
   admin: {
-    label: 'Administrador', labelPlural: 'Administradores', icon: <Crown className="size-3.5" />,
-    badgeClass: 'bg-violet-100 text-violet-700 border-violet-200', cardClass: 'border-l-violet-400',
+    label: 'Administrador',
+    icon: <Crown className="size-3.5" />,
+    badgeClass: 'bg-violet-100 text-violet-700 border-violet-200',
+    cardClass: 'border-l-violet-400',
   },
   worker: {
-    label: 'Trabajador', labelPlural: 'Trabajadores', icon: <Briefcase className="size-3.5" />,
-    badgeClass: 'bg-sky-100 text-sky-700 border-sky-200', cardClass: 'border-l-sky-400',
+    label: 'Trabajador',
+    icon: <Briefcase className="size-3.5" />,
+    badgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
+    cardClass: 'border-l-sky-400',
   },
   client: {
-    label: 'Cliente', labelPlural: 'Clientes', icon: <User className="size-3.5" />,
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200', cardClass: 'border-l-emerald-400',
+    label: 'Cliente',
+    icon: <User className="size-3.5" />,
+    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    cardClass: 'border-l-emerald-400',
   },
 }
 
@@ -35,78 +48,212 @@ function getAvatarColor(sub: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
-function getMemberName(member: ProjectMember) {
+function getDisplayName(member: ProjectMember) {
   const full = `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim()
-  return full || member.email || 'Sin nombre registrado'
-}
-
-function getMemberDetail(member: ProjectMember) {
-  if (member.role === 'worker') return member.profession || 'Trabajador'
-  if (member.role === 'client' && member.client_kind === 'juridical') return member.company_name || 'Cliente juridico'
-  return member.role === 'admin' ? 'Administrador' : 'Cliente'
+  if (full) return full
+  if (member.role === 'client' && member.client_kind === 'juridical' && member.company_name) return member.company_name
+  return member.email || 'Sin nombre registrado'
 }
 
 function getInitials(member: ProjectMember) {
   const full = `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim()
   if (full) {
     const parts = full.split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
     return parts[0].slice(0, 2).toUpperCase()
   }
-  if (!member.email) return '?'
-  return member.email.slice(0, 2).toUpperCase()
+  return member.email ? member.email.slice(0, 2).toUpperCase() : '?'
 }
 
-export function ProjectMembers({ members, isLoading }: Props) {
-  if (isLoading) return <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" /></div>
-  if (members.length === 0) return <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground"><Users className="size-10 opacity-20" /><p className="text-sm">No hay integrantes en este proyecto.</p></div>
+function getRoleDetail(member: ProjectMember) {
+  if (member.role === 'worker') return member.profession?.trim() || 'Profesion no registrada'
+  if (member.role === 'client' && member.client_kind === 'juridical') return 'Cliente juridico'
+  return ROLE_CONFIG[member.role].label
+}
 
-  const byRole = members.reduce<Record<ProjectMemberRole, ProjectMember[]>>((acc, m) => {
-    acc[m.role] = [...(acc[m.role] ?? []), m]
+function formatDateLabel(iso: string | null) {
+  if (!iso) return 'Sin registro'
+  return new Date(iso).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function getRelativeActivityLabel(iso: string | null) {
+  if (!iso) return 'Sin registro'
+  const now = new Date()
+  const then = new Date(iso)
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startThen = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime()
+  const days = Math.floor((startNow - startThen) / 86_400_000)
+  if (days <= 0) return 'Hoy'
+  if (days === 1) return 'Ayer'
+  if (days < 7) return `Hace ${days} dias`
+  if (days < 30) return `Hace ${Math.floor(days / 7)} semana${Math.floor(days / 7) === 1 ? '' : 's'}`
+  if (days < 365) return `Hace ${Math.floor(days / 30)} mes${Math.floor(days / 30) === 1 ? '' : 'es'}`
+  return `Hace ${Math.floor(days / 365)} ano${Math.floor(days / 365) === 1 ? '' : 's'}`
+}
+
+export function ProjectMembers({ members, isLoading, accessToken, projectId, canManageMembers, onError }: Props) {
+  const queryClient = useQueryClient()
+  const [selectedWorkers, setSelectedWorkers] = useState<ClientSearchResult[]>([])
+
+  const membersQ = useQuery({
+    queryKey: collabKeys.projectMembers(projectId),
+    queryFn: () => listProjectMembersRequest(accessToken, projectId),
+    initialData: members.length > 0 ? { data: members } : undefined,
+    staleTime: 20_000,
+  })
+
+  const resolvedMembers = membersQ.data?.data ?? members
+
+  const addWorker = useMutation({
+    mutationFn: async () => {
+      for (const worker of selectedWorkers) {
+        await upsertProjectMemberRequest(accessToken, projectId, {
+          user_sub: worker.subject,
+          user_email: worker.email,
+          role: 'worker',
+        })
+      }
+    },
+    onSuccess: () => {
+      setSelectedWorkers([])
+      void queryClient.invalidateQueries({ queryKey: collabKeys.projectMembers(projectId) })
+      void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
+      void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
+    },
+    onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo agregar trabajador al proyecto')),
+  })
+
+  if (isLoading || membersQ.isLoading) {
+    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" /></div>
+  }
+  if (resolvedMembers.length === 0) {
+    return <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground"><Users className="size-10 opacity-20" /><p className="text-sm">No hay integrantes en este proyecto.</p></div>
+  }
+
+  const memberSubs = new Set(resolvedMembers.map((m) => m.userSub))
+  const filteredSelection = selectedWorkers.filter((w) => !memberSubs.has(w.subject))
+  const byRole = resolvedMembers.reduce<Record<ProjectMemberRole, ProjectMember[]>>((acc, member) => {
+    acc[member.role] = [...acc[member.role], member]
     return acc
   }, { admin: [], worker: [], client: [] })
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 p-4 rounded-xl bg-muted/40 border">
-        {(['admin', 'worker', 'client'] as ProjectMemberRole[]).map((role) => {
-          const cfg = ROLE_CONFIG[role]
-          const count = byRole[role]?.length ?? 0
-          if (count === 0) return null
-          return <div key={role} className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${cfg.badgeClass}`}>{cfg.icon}<span>{count} {count === 1 ? cfg.label : cfg.labelPlural}</span></div>
-        })}
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border bg-background text-muted-foreground ml-auto"><Users className="size-3.5" /><span>{members.length} en total</span></div>
+      {canManageMembers && (
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Agregar trabajador</h3>
+            <Button size="sm" onClick={() => addWorker.mutate()} disabled={filteredSelection.length === 0 || addWorker.isPending}>
+              <Plus className="mr-1 size-4" />
+              {addWorker.isPending ? 'Agregando...' : 'Agregar trabajador'}
+            </Button>
+          </div>
+
+          {filteredSelection.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {filteredSelection.map((worker) => (
+                <UserChip key={worker.subject} email={worker.email} onRemove={() => setSelectedWorkers((prev) => prev.filter((x) => x.subject !== worker.subject))} />
+              ))}
+            </div>
+          )}
+
+          <UserSearch
+            accessToken={accessToken}
+            role="worker"
+            selected={filteredSelection}
+            onSelect={(worker) => {
+              if (memberSubs.has(worker.subject)) return
+              setSelectedWorkers((prev) => prev.some((w) => w.subject === worker.subject) ? prev : [...prev, worker])
+            }}
+            placeholder="Buscar trabajador por email..."
+            queryKeyPrefix="project-member-worker"
+          />
+        </div>
+      )}
+
+      <div className="rounded-xl border bg-muted/40 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['admin', 'worker', 'client'] as ProjectMemberRole[]).map((role) => {
+            const count = byRole[role].length
+            if (count === 0) return null
+            const cfg = ROLE_CONFIG[role]
+            return (
+              <span key={role} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${cfg.badgeClass}`}>
+                {cfg.icon}
+                {cfg.label}: {count}
+              </span>
+            )
+          })}
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+            <Users className="size-3.5" />
+            {resolvedMembers.length} en total
+          </span>
+        </div>
       </div>
 
       {(['admin', 'worker', 'client'] as ProjectMemberRole[]).map((role) => {
         const group = byRole[role]
-        if (!group?.length) return null
+        if (!group.length) return null
         const cfg = ROLE_CONFIG[role]
         return (
-          <div key={role}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${cfg.badgeClass}`}>{cfg.icon}{cfg.labelPlural}</div>
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">{group.length}</span>
+          <section key={role} className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${cfg.badgeClass}`}>
+                {cfg.icon}
+                {cfg.label}
+              </div>
+              <div className="h-px flex-1 bg-border" />
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {group.map((m) => (
-                <div key={m.userSub} className={`flex items-center gap-3 rounded-xl border border-l-4 bg-card px-4 py-3 shadow-sm hover:shadow-md transition-shadow ${cfg.cardClass}`}>
-                  <div className={`${getAvatarColor(m.userSub)} size-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 select-none`}>{getInitials(m)}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" title={getMemberName(m)}>{getMemberName(m)}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{getMemberDetail(m)}</p>
-                    {m.email && <p className="text-[11px] text-muted-foreground truncate">{m.email}</p>}
-                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">Desde {new Date(m.createdAt).toLocaleDateString('es', { dateStyle: 'medium' })}</p>
-                  </div>
-                  <div className="shrink-0 flex flex-col items-center gap-0.5 min-w-[2.5rem]" title={`${m.taskCount} tarea${m.taskCount !== 1 ? 's' : ''}`}>
-                    <div className="flex items-center gap-1"><CheckSquare2 className="size-3.5 text-muted-foreground" /><span className={`text-base font-bold leading-none ${m.taskCount > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{m.taskCount}</span></div>
-                    <span className="text-[9px] text-muted-foreground">{m.taskCount === 1 ? 'tarea' : 'tareas'}</span>
-                  </div>
-                </div>
-              ))}
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {group.map((member) => {
+                const displayName = getDisplayName(member)
+                const showEmailLine = Boolean(member.email && member.email !== displayName)
+                return (
+                  <article key={member.userSub} className={`rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-shadow hover:shadow-md ${cfg.cardClass}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`${getAvatarColor(member.userSub)} flex size-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-bold text-white`}>
+                        {getInitials(member)}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="truncate text-sm font-semibold" title={displayName}>{displayName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{cfg.label} · {getRoleDetail(member)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                      {showEmailLine && (
+                        <p className="flex items-center gap-1.5 truncate">
+                          <Mail className="size-3.5 shrink-0" />
+                          <span className="truncate">{member.email}</span>
+                        </p>
+                      )}
+                      <p>Desde: {formatDateLabel(member.createdAt)}</p>
+                      {member.role !== 'admin' && (
+                        <p>
+                          Ultima actividad: {getRelativeActivityLabel(member.lastSeenAt)}
+                          {member.lastSeenAt ? <span className="ml-1 text-[10px]">({formatDateLabel(member.lastSeenAt)})</span> : null}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-end gap-3 border-t pt-2.5 text-xs text-muted-foreground">
+                      {member.role !== 'admin' && (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 className="size-3.5" />
+                          Activo en proyecto
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        <CheckSquare2 className="size-3.5" />
+                        <strong className="text-foreground">{member.taskCount}</strong>
+                      </span>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
-          </div>
+          </section>
         )
       })}
     </div>

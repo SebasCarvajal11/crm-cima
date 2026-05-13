@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Calendar, FileText, Lock, Paperclip, Pencil, MessageSquare, User, X, CheckSquare, Trash2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import { UserSearch } from '@/components/molecules/user-search'
 import { UserChip } from '@/components/molecules/user-chip'
 import { PriorityBadge, PRIORITY_CONFIG } from '@/components/molecules/priority-badge'
 import { parseApiError } from '@/auth/parse-api-error'
@@ -49,8 +48,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('none')
   const queryClient = useQueryClient()
 
-  // Workers and admins from project members (clients can't be assigned subtasks)
-  const assignableMembers = members.filter(m => m.role === 'worker' || m.role === 'admin')
+  const assignableMembers = members.filter((m) => m.role === 'worker' && Boolean(m.email))
 
   useEffect(() => {
     setEditing(false); setTab('info')
@@ -81,13 +79,13 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
       if (variables === undefined) {
         onSaved()
       } else {
-        void queryClient.invalidateQueries({ queryKey: collabKeys.projectWorkspace(projectId) })
+        void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
       }
     },
     onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo guardar')),
   })
 
-  // ── Subtask handlers ─────────────────────────────────────────────────────
+  // â”€â”€ Subtask handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Bloquear agregar subtarea si no hay asignado seleccionado */
   const canAddSubtask = newSubtask.trim().length > 0 && newSubtaskAssignee !== 'none'
@@ -182,7 +180,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {tab === 'info' && (
           !editing ? (
-            /* ── VISTA DE DETALLE ── */
+            /* â”€â”€ VISTA DE DETALLE â”€â”€ */
             <div className="space-y-5">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Descripcion</p>
@@ -198,7 +196,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground mb-1">Visible al cliente</dt>
-                  <dd className="font-medium">{task.isClientVisible ? 'Sí' : 'No'}</dd>
+                  <dd className="font-medium">{task.isClientVisible ? 'SÃ­' : 'No'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground mb-1">Creada</dt>
@@ -214,7 +212,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
                 </div>
                 {task.deadline && (
                   <div className="col-span-2">
-                    <dt className="text-xs text-muted-foreground mb-1">Fecha límite</dt>
+                    <dt className="text-xs text-muted-foreground mb-1">Fecha lÃ­mite</dt>
                     <dd className="flex items-center gap-1.5">
                       <Calendar className="size-3.5 text-muted-foreground" aria-hidden="true" />
                       {new Date(task.deadline).toLocaleDateString('es', { dateStyle: 'long' })}
@@ -224,7 +222,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               </dl>
               <Separator />
 
-              {/* ── SUBTAREAS ── */}
+              {/* â”€â”€ SUBTAREAS â”€â”€ */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
@@ -299,27 +297,24 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
                         <Select value={newSubtaskAssignee} onValueChange={setNewSubtaskAssignee}>
                           <SelectTrigger className="h-8 text-xs w-full">
                             <User className="size-3 mr-1 shrink-0" />
-                            <SelectValue placeholder="1. Elige quién la hará…" />
+                            <SelectValue placeholder="1. Elige quiÃ©n la harÃ¡â€¦" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none" disabled>— Seleccionar trabajador —</SelectItem>
+                            <SelectItem value="none" disabled>â€” Seleccionar trabajador â€”</SelectItem>
                             {assignableMembers.map((m) => (
                               <SelectItem key={m.userSub} value={m.userSub}>
-                                {m.role === 'admin' ? '👑 ' : ''}
                                 {m.email ? m.email.split('@')[0] : m.userSub.slice(0, 8)}
-                                {' '}
-                                <span className="text-muted-foreground text-[10px]">({m.role})</span>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
 
-                        {/* Luego el input + botón */}
+                        {/* Luego el input + botÃ³n */}
                         <div className="flex items-center gap-2">
                           <Input
                             placeholder={newSubtaskAssignee === 'none'
-                              ? 'Primero elige un trabajador arriba…'
-                              : '2. Describe la subtarea…'}
+                              ? 'Primero elige un trabajador arribaâ€¦'
+                              : '2. Describe la subtareaâ€¦'}
                             value={newSubtask}
                             onChange={(e) => setNewSubtask(e.target.value)}
                             className="h-8 text-sm"
@@ -358,17 +353,17 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               )}
             </div>
           ) : (
-            /* ── MODO EDICIÓN ── */
+            /* â”€â”€ MODO EDICIÃ“N â”€â”€ */
             <div className="space-y-4">
-              {/* Título */}
+              {/* TÃ­tulo */}
               <div className="space-y-1.5">
-                <Label htmlFor="et-title" className="text-xs font-medium">Título <span className="text-destructive">*</span></Label>
+                <Label htmlFor="et-title" className="text-xs font-medium">TÃ­tulo <span className="text-destructive">*</span></Label>
                 <Input id="et-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
               </div>
 
-              {/* Descripción */}
+              {/* DescripciÃ³n */}
               <div className="space-y-1.5">
-                <Label htmlFor="et-desc" className="text-xs font-medium">Descripción</Label>
+                <Label htmlFor="et-desc" className="text-xs font-medium">DescripciÃ³n</Label>
                 <Textarea id="et-desc" value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
                   className="min-h-[100px] resize-none" />
               </div>
@@ -398,9 +393,9 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
                 </div>
               </div>
 
-              {/* Fecha límite */}
+              {/* Fecha lÃ­mite */}
               <div className="space-y-1.5">
-                <Label htmlFor="et-dead" className="text-xs font-medium">Fecha límite</Label>
+                <Label htmlFor="et-dead" className="text-xs font-medium">Fecha lÃ­mite</Label>
                 <Input id="et-dead" type="date" value={editDeadline}
                   onChange={(e) => setEditDeadline(e.target.value)} />
               </div>
@@ -408,23 +403,44 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               {/* Trabajadores asignados */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Trabajadores asignados</Label>
-                <p className="text-[11px] text-muted-foreground">Reemplazará la asignación actual si agregas trabajadores.</p>
+                <p className="text-[11px] text-muted-foreground">Solo puedes asignar trabajadores del proyecto.</p>
                 {editWorkers.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-1">
-                    {editWorkers.map(w => (
+                    {editWorkers.map((w) => (
                       <UserChip key={w.subject} email={w.email}
-                        onRemove={() => setEditWorkers(p => p.filter(x => x.subject !== w.subject))} />
+                        onRemove={() => setEditWorkers((p) => p.filter((x) => x.subject !== w.subject))} />
                     ))}
                   </div>
                 )}
-                <UserSearch
-                  accessToken={accessToken}
-                  role="worker"
-                  selected={editWorkers}
-                  onSelect={(w) => setEditWorkers(p => [...p, w])}
-                  placeholder="Buscar trabajadores…"
-                  queryKeyPrefix="task-edit-worker"
-                />
+                {assignableMembers.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                    <Lock className="size-3.5 shrink-0" />
+                    <span>Este proyecto no tiene trabajadores disponibles.</span>
+                  </div>
+                ) : (
+                  <Select value="none" onValueChange={(value) => {
+                    if (value === 'none') return
+                    const worker = assignableMembers.find((m) => m.userSub === value)
+                    if (!worker?.email) return
+                    setEditWorkers((prev) => prev.some((existing) => existing.subject === worker.userSub)
+                      ? prev
+                      : [...prev, { subject: worker.userSub, email: worker.email!, role: 'worker' }])
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona trabajador del proyecto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar...</SelectItem>
+                      {assignableMembers
+                        .filter((m) => !editWorkers.some((w) => w.subject === m.userSub))
+                        .map((m) => (
+                          <SelectItem key={m.userSub} value={m.userSub}>
+                            {m.email}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Visible al cliente */}
@@ -433,7 +449,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
                   onChange={(e) => setEditVisible(e.target.checked)} />
                 <div>
                   <p className="text-sm font-medium">Visible para el cliente</p>
-                  <p className="text-xs text-muted-foreground">El cliente podrá ver esta tarea</p>
+                  <p className="text-xs text-muted-foreground">El cliente podrÃ¡ ver esta tarea</p>
                 </div>
               </label>
 
@@ -441,7 +457,7 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               <div className="flex gap-2">
                 <Button className="flex-1" disabled={editTitle.trim().length < 2 || save.isPending}
                   onClick={() => save.mutate(undefined)}>
-                  {save.isPending ? 'Guardando…' : 'Guardar cambios'}
+                  {save.isPending ? 'Guardandoâ€¦' : 'Guardar cambios'}
                 </Button>
                 <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
               </div>
@@ -458,3 +474,5 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
     </>
   )
 }
+
+

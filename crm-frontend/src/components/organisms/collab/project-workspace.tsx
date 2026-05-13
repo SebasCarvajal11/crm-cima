@@ -1,11 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, ArrowLeft, FileText, KanbanSquare, MessageSquare, User, Users } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ProjectTypeBadge } from '@/components/molecules/project-type-badge'
 import { parseApiError } from '@/auth/parse-api-error'
-import { getProjectWorkspaceRequest, patchTaskRequest } from '@/collab/collab-api'
+import {
+  getBriefRequest,
+  getProjectBoardRequest,
+  listExternalChatRequest,
+  listFormalChangeLogRequest,
+  listInternalChatRequest,
+  patchTaskRequest,
+} from '@/collab/collab-api'
 import { collabKeys } from '@/collab/query-keys'
 import { PARENT_COLUMNS, PRIORITY_WEIGHT, STATUS_DOT } from './collab.config'
 import { TaskBoard } from './task-board'
@@ -23,6 +30,7 @@ type Props = {
   projectId: string
   projectMeta: Project | ProjectListItem | null
   initialChatChannel?: 'internal' | 'external'
+  initialChatMessageId?: string
   onBack: () => void
 }
 
@@ -34,7 +42,7 @@ const TABS: { value: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
 ]
 
 /** Organismo: workspace de un proyecto (tablero hijo + tabs de conversacion, archivos y brief). */
-export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, initialChatChannel, onBack }: Props) {
+export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, initialChatChannel, initialChatMessageId, onBack }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialChatChannel ? 'chat' : 'board')
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -42,22 +50,80 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
   const isClient   = identity.role === 'client'
   const canOperate = identity.role === 'admin' || identity.role === 'worker'
 
-  const workspaceQ = useQuery({
-    queryKey: collabKeys.projectWorkspace(projectId),
-    queryFn:  () => getProjectWorkspaceRequest(accessToken, projectId),
+  const boardQ = useQuery({
+    queryKey: collabKeys.projectBoard(projectId),
+    queryFn:  () => getProjectBoardRequest(accessToken, projectId),
+    staleTime: 30_000,
+  })
+  const briefQ = useQuery({
+    queryKey: [...collabKeys.brief(projectId), 'panel'],
+    queryFn: async () => {
+      const [briefRes, formalRes] = await Promise.all([
+        getBriefRequest(accessToken, projectId),
+        listFormalChangeLogRequest(accessToken, projectId),
+      ])
+      return {
+        brief: briefRes.data ?? null,
+        formalChanges: (formalRes.data ?? []).map((row) => ({
+          id: row.id,
+          title: row.description,
+          status: 'approved',
+          createdAt: row.createdAt,
+        })),
+      }
+    },
+    enabled: activeTab === 'brief',
+    staleTime: 60_000,
   })
 
-  const ws      = workspaceQ.data?.data
-  const project = ws?.project ?? projectMeta
+  const boardData = boardQ.data?.data
+  const project = boardData?.project ?? projectMeta
 
   const boardColumns = useMemo(() => {
-    const cols = ws?.board.columns ?? []
+    const cols = boardData?.board.columns ?? []
     return [...cols].sort((a, b) => a.position - b.position)
-  }, [ws])
+  }, [boardData])
 
   const boardTasks = useMemo(() => {
-    return ws?.board.tasks ?? []
-  }, [ws])
+    return boardData?.board.tasks ?? []
+  }, [boardData])
+
+  const members = boardData?.members ?? []
+
+  useEffect(() => {
+    void queryClient.prefetchQuery({
+      queryKey: collabKeys.chatExternal(projectId),
+      queryFn: () => listExternalChatRequest(accessToken, projectId),
+      staleTime: 15_000,
+    })
+    if (!isClient) {
+      void queryClient.prefetchQuery({
+        queryKey: collabKeys.chatInternal(projectId),
+        queryFn: () => listInternalChatRequest(accessToken, projectId),
+        staleTime: 15_000,
+      })
+    }
+
+    void queryClient.prefetchQuery({
+      queryKey: [...collabKeys.brief(projectId), 'panel'],
+      queryFn: async () => {
+        const [briefRes, formalRes] = await Promise.all([
+          getBriefRequest(accessToken, projectId),
+          listFormalChangeLogRequest(accessToken, projectId),
+        ])
+        return {
+          brief: briefRes.data ?? null,
+          formalChanges: (formalRes.data ?? []).map((row) => ({
+            id: row.id,
+            title: row.description,
+            status: 'approved',
+            createdAt: row.createdAt,
+          })),
+        }
+      },
+      staleTime: 60_000,
+    })
+  }, [accessToken, isClient, projectId, queryClient])
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, ProjectTask[]> = {}
@@ -76,7 +142,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
     mutationFn: ({ taskId, targetColumnId, position }: { taskId: string; targetColumnId: string; position: number }) =>
       patchTaskRequest(accessToken, taskId, { column_id: targetColumnId, position }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projectWorkspace(projectId) })
+      void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
       void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
     },
     onError: (e) => parseApiError(e).then((m) => setErrorMsg(m || 'No se pudo mover la tarea')),
@@ -167,14 +233,14 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               columns={boardColumns}
               tasksByColumn={tasksByColumn}
               identity={identity}
-              members={ws?.members ?? []}
+              members={members}
               canOperate={canOperate}
-              isLoading={workspaceQ.isLoading}
+              isLoading={boardQ.isLoading}
               onMoveTask={(taskId, targetColumnId) =>
                 moveTask.mutate({ taskId, targetColumnId, position: (tasksByColumn[targetColumnId] ?? []).length })
               }
               onTaskSaved={() => {
-                void queryClient.invalidateQueries({ queryKey: collabKeys.projectWorkspace(projectId) })
+                void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
                 void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
               }}
               onError={setErrorMsg}
@@ -189,7 +255,8 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               identity={identity}
               isClient={isClient}
               initialChannel={initialChatChannel}
-              members={ws?.members ?? []}
+              initialMessageId={initialChatMessageId}
+              members={members}
               tasks={boardTasks}
               onError={setErrorMsg}
             />
@@ -197,13 +264,23 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
         )}
         {activeTab === 'brief' && (
           <div id="tabpanel-brief" role="tabpanel">
-            <BriefPanel brief={ws?.brief ?? null} formalChanges={ws?.formalChanges ?? []}
-              isLoading={workspaceQ.isLoading} />
+            <BriefPanel
+              brief={briefQ.data?.brief ?? null}
+              formalChanges={briefQ.data?.formalChanges ?? []}
+              isLoading={briefQ.isLoading}
+            />
           </div>
         )}
         {activeTab === 'members' && (
           <div id="tabpanel-members" role="tabpanel">
-            <ProjectMembers members={ws?.members ?? []} isLoading={workspaceQ.isLoading} />
+            <ProjectMembers
+              members={members}
+              isLoading={boardQ.isLoading}
+              accessToken={accessToken}
+              projectId={projectId}
+              canManageMembers={identity.role === 'admin'}
+              onError={setErrorMsg}
+            />
           </div>
         )}
       </div>

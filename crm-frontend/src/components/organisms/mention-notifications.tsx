@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, MessageSquare, X } from 'lucide-react'
 import {
@@ -9,7 +9,7 @@ import { collabKeys } from '@/collab/query-keys'
 
 type Props = {
   accessToken: string
-  onOpenNotification: (payload: { projectId: string; channel: 'internal' | 'external' | 'system' }) => void
+  onOpenNotification: (payload: { projectId: string; channel: 'internal' | 'external' | 'system'; messageId: string }) => void
 }
 
 const formatWhen = (iso: string) => {
@@ -19,6 +19,7 @@ const formatWhen = (iso: string) => {
 
 export function MentionNotifications({ accessToken, onOpenNotification }: Props) {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
   const notificationsQ = useQuery({
@@ -40,12 +41,32 @@ export function MentionNotifications({ accessToken, onOpenNotification }: Props)
 
   const handleOpen = async (item: (typeof rows)[number]) => {
     await markSeen.mutateAsync(item.id)
-    onOpenNotification({ projectId: item.project_id, channel: item.channel })
+    onOpenNotification({ projectId: item.project_id, channel: item.channel, messageId: item.message_id })
     setOpen(false)
   }
 
+  useEffect(() => {
+    if (!open) return
+
+    const onClickOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onEsc)
+
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [open])
+
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -61,9 +82,9 @@ export function MentionNotifications({ accessToken, onOpenNotification }: Props)
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[22rem] max-w-[90vw] rounded-xl border bg-card shadow-lg">
+        <div className="fixed left-3 right-3 top-14 z-50 rounded-xl border bg-card text-foreground shadow-lg sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-2 sm:w-[22rem] sm:max-w-[calc(100vw-1rem)]">
           <div className="flex items-center justify-between border-b px-3 py-2">
-            <p className="text-sm font-semibold">Mensajes por mención</p>
+            <p className="text-sm font-semibold text-foreground">Mensajes por mencion</p>
             <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
               <X className="size-4" />
             </button>
@@ -96,4 +117,3 @@ export function MentionNotifications({ accessToken, onOpenNotification }: Props)
     </div>
   )
 }
-

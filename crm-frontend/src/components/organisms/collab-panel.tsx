@@ -27,10 +27,11 @@ type Props = {
   initialProjects?: ProjectListItem[]
   initialOpenProjectId?: string
   initialOpenChannel?: 'internal' | 'external'
+  initialOpenMessageId?: string
 }
 
 /** Organismo raiz del panel de colaboracion. Gestiona la navegacion entre tablero padre y workspace. */
-export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialOpenChannel }: Props) {
+export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialOpenChannel, initialOpenMessageId }: Props) {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
   const [showModal,     setShowModal]     = useState(false)
   const [initialJumpUsed, setInitialJumpUsed] = useState(false)
@@ -70,6 +71,7 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
         projectId={openProjectId}
         projectMeta={projects.find((p) => p.id === openProjectId) ?? null}
         initialChatChannel={initialOpenChannel}
+        initialChatMessageId={initialOpenMessageId}
         onBack={() => setOpenProjectId(null)}
       />
     )

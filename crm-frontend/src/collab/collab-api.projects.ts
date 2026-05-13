@@ -2,7 +2,9 @@ import { api } from '@/lib/api'
 import type {
   DataResponse,
   Project,
+  ProjectMember,
   ProjectBrief,
+  ProjectBoardResponse,
   ProjectChangeRequest,
   ProjectFileEnriched,
   ProjectListItem,
@@ -44,6 +46,7 @@ export async function createProjectRequest(
     description?: string
     client_name: string
     client_sub?: string
+    worker_subs: string[]
     type: Project['type']
     brief?: string
   }
@@ -56,6 +59,13 @@ export async function getProjectWorkspaceRequest(
   projectId: string
 ): Promise<DataResponse<ProjectWorkspaceResponse>> {
   return api.get(`projects/${projectId}/workspace`, { headers: bearer(accessToken) }).json<DataResponse<ProjectWorkspaceResponse>>()
+}
+
+export async function getProjectBoardRequest(
+  accessToken: string,
+  projectId: string
+): Promise<DataResponse<ProjectBoardResponse>> {
+  return api.get(`projects/${projectId}/board`, { headers: bearer(accessToken) }).json<DataResponse<ProjectBoardResponse>>()
 }
 
 export async function getBriefRequest(
@@ -78,6 +88,21 @@ export async function listProjectFilesEnrichedRequest(
   projectId: string
 ): Promise<DataResponse<ProjectFileEnriched[]>> {
   return api.get(`projects/${projectId}/files`, { headers: bearer(accessToken) }).json<DataResponse<ProjectFileEnriched[]>>()
+}
+
+export async function upsertProjectMemberRequest(
+  accessToken: string,
+  projectId: string,
+  body: { user_sub: string; role: 'admin' | 'worker' | 'client'; user_email?: string }
+): Promise<DataResponse<ProjectMember>> {
+  return api.put(`projects/${projectId}/members`, { headers: bearer(accessToken), json: body }).json<DataResponse<ProjectMember>>()
+}
+
+export async function listProjectMembersRequest(
+  accessToken: string,
+  projectId: string
+): Promise<DataResponse<ProjectMember[]>> {
+  return api.get(`projects/${projectId}/members`, { headers: bearer(accessToken) }).json<DataResponse<ProjectMember[]>>()
 }
 
 export async function listProjectFilesTimelineRequest(

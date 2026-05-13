@@ -1,6 +1,8 @@
 export const collabKeys = {
   all: ['collab'] as const,
   projects: () => [...collabKeys.all, 'projects'] as const,
+  projectBoard: (projectId: string) => [...collabKeys.all, 'project-board', projectId] as const,
+  projectMembers: (projectId: string) => [...collabKeys.all, 'project-members', projectId] as const,
   projectWorkspace: (projectId: string) => [...collabKeys.all, 'project-workspace', projectId] as const,
   chatExternal: (projectId: string) => [...collabKeys.all, 'chat', 'external', projectId] as const,
   chatInternal: (projectId: string) => [...collabKeys.all, 'chat', 'internal', projectId] as const,

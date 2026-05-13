@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build && tsc -b",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preinstall": "npx only-allow pnpm"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",

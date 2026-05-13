@@ -44,12 +44,14 @@ export type ProjectMember = {
   userSub: string
   role: ProjectMemberRole
   email: string | null
+  role_label?: string | null
   first_name: string | null
   last_name: string | null
   client_kind: 'natural' | 'juridical' | null
   company_name: string | null
   profession: string | null
   taskCount: number
+  lastSeenAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -126,6 +128,15 @@ export type ProjectWorkspaceResponse = {
     title: string
     createdAt: string
   }>
+}
+
+export type ProjectBoardResponse = {
+  project: Project
+  members: ProjectMember[]
+  board: {
+    columns: ProjectTaskColumn[]
+    tasks: ProjectTask[]
+  }
 }
 
 export type ProjectBrief = {

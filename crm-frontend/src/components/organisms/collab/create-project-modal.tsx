@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { UserChip } from '@/components/molecules/user-chip'
 import { UserSearch } from '@/components/molecules/user-search'
 import { parseApiError } from '@/auth/parse-api-error'
 import type { ClientSearchResult } from '@/auth/auth-api'
@@ -34,12 +35,15 @@ export function CreateProjectModal({ accessToken, open, onClose, onCreated }: Pr
   const [type,           setType]           = useState<ProjectType>('campaign_service')
   const [errorMsg,       setErrorMsg]       = useState<string | null>(null)
   const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null)
+  const [selectedWorkers, setSelectedWorkers] = useState<ClientSearchResult[]>([])
 
   const createProject = useMutation({
     mutationFn: () =>
       createProjectRequest(accessToken, {
         name:        name.trim(),
         client_name: selectedClient?.email ?? '',
+        client_sub: selectedClient?.subject,
+        worker_subs: selectedWorkers.map((w) => w.subject),
         type,
         description: description.trim() || `Proyecto de tipo ${type}`,
         brief:       brief.trim()       || 'Brief inicial del proyecto.',
@@ -54,11 +58,11 @@ export function CreateProjectModal({ accessToken, open, onClose, onCreated }: Pr
 
   const handleClose = () => {
     setName(''); setDescription(''); setBrief(''); setType('campaign_service')
-    setSelectedClient(null); setErrorMsg(null)
+    setSelectedClient(null); setSelectedWorkers([]); setErrorMsg(null)
     onClose()
   }
 
-  const canSubmit = name.trim().length >= 3 && !!selectedClient
+  const canSubmit = name.trim().length >= 3 && !!selectedClient && selectedWorkers.length >= 1
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
@@ -113,6 +117,30 @@ export function CreateProjectModal({ accessToken, open, onClose, onCreated }: Pr
               />
             )}
             <p className="text-xs text-muted-foreground">Busca un usuario cliente registrado en el sistema.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Trabajadores iniciales <span className="text-destructive">*</span></Label>
+            {selectedWorkers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-1">
+                {selectedWorkers.map((worker) => (
+                  <UserChip
+                    key={worker.subject}
+                    email={worker.email}
+                    onRemove={() => setSelectedWorkers((prev) => prev.filter((w) => w.subject !== worker.subject))}
+                  />
+                ))}
+              </div>
+            )}
+            <UserSearch
+              accessToken={accessToken}
+              role="worker"
+              selected={selectedWorkers}
+              onSelect={(worker) => setSelectedWorkers((prev) => prev.some((w) => w.subject === worker.subject) ? prev : [...prev, worker])}
+              placeholder="Busca por email del trabajador..."
+              queryKeyPrefix="worker-create-project-search"
+            />
+            <p className="text-xs text-muted-foreground">Debes seleccionar al menos un trabajador. Luego podrás agregar más en Integrantes.</p>
           </div>
 
           <div className="space-y-1.5">

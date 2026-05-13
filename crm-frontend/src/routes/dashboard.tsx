@@ -1,18 +1,8 @@
-import {
-  createFileRoute,
-  Link,
-  redirect,
-  useNavigate,
-} from '@tanstack/react-router'
+﻿import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { isHTTPError } from 'ky'
-import {
-  BarChart3,
-  KanbanSquare,
-  ShieldCheck,
-  User,
-} from 'lucide-react'
+import { BarChart3, KanbanSquare, ShieldCheck, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,14 +16,7 @@ import { useSessionStore } from '@/auth/session-store'
 import { logoutRequest } from '@/auth/auth-api'
 import { fetchDashboardBff } from '@/bff/bff-api'
 import { bffKeys } from '@/bff/query-keys'
-
-type DashboardTab = 'overview' | 'collab' | 'account' | 'admin'
-
-type DashboardSearch = {
-  tab?: DashboardTab
-  project_id?: string
-  chat_channel?: 'internal' | 'external'
-}
+import { parseDashboardSearch, type DashboardTab } from './-dashboard.search'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: () => {
@@ -42,24 +25,12 @@ export const Route = createFileRoute('/dashboard')({
       throw redirect({ to: '/login' })
     }
   },
-  validateSearch: (search: Record<string, unknown>): DashboardSearch => {
-    const tab = search.tab
-    return {
-      tab:
-        tab === 'overview' || tab === 'collab' || tab === 'account' || tab === 'admin'
-          ? tab
-          : undefined,
-      project_id: typeof search.project_id === 'string' ? search.project_id : undefined,
-      chat_channel: search.chat_channel === 'internal' || search.chat_channel === 'external'
-        ? search.chat_channel
-        : undefined,
-    }
-  },
+  validateSearch: parseDashboardSearch,
   component: DashboardPage,
 })
 
 function DashboardPage() {
-  const { tab, project_id, chat_channel } = Route.useSearch()
+  const { tab, project_id, chat_channel, chat_message_id } = Route.useSearch()
   const token = useSessionStore((s) => s.token)
   const emailStored = useSessionStore((s) => s.email)
   const clearSession = useSessionStore((s) => s.clearSession)
@@ -116,14 +87,14 @@ function DashboardPage() {
     },
   })
 
-  const goTo = (next: DashboardTab) =>
+  const goTo = (next: 'overview' | 'collab' | 'account' | 'admin') =>
     navigate({
       to: '/dashboard',
       search: (prev) => ({ ...prev, tab: next }),
       replace: true,
     })
 
-  const goToMention = (payload: { projectId: string; channel: 'internal' | 'external' | 'system' }) => {
+  const goToMention = (payload: { projectId: string; channel: 'internal' | 'external' | 'system'; messageId: string }) => {
     navigate({
       to: '/dashboard',
       search: (prev) => ({
@@ -131,16 +102,17 @@ function DashboardPage() {
         tab: 'collab',
         project_id: payload.projectId,
         chat_channel: payload.channel === 'internal' ? 'internal' : 'external',
+        chat_message_id: payload.messageId,
       }),
       replace: true,
     })
   }
 
-  // ── Estados de carga / error antes de tener identity ──
+  // â”€â”€ Estados de carga / error antes de tener identity â”€â”€
   if (isUnauthorized) {
     return (
       <div className="flex items-center justify-center min-h-screen px-4">
-        <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesion…</p>
+        <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesionâ€¦</p>
       </div>
     )
   }
@@ -157,7 +129,7 @@ function DashboardPage() {
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
-          <p className="text-sm text-muted-foreground text-center">Comprobando sesion…</p>
+          <p className="text-sm text-muted-foreground text-center">Comprobando sesionâ€¦</p>
         </div>
       </div>
     )
@@ -245,6 +217,7 @@ function DashboardPage() {
           initialProjects={projects?.data}
           initialOpenProjectId={project_id}
           initialOpenChannel={chat_channel}
+          initialOpenMessageId={chat_message_id}
         />
       )}
 
@@ -257,7 +230,7 @@ function DashboardPage() {
       )}
 
       <p className="mt-12 text-center text-xs text-muted-foreground">
-        ¿Problemas de acceso?{' '}
+        Â¿Problemas de acceso?{' '}
         <Link
           to="/forgot-password"
           className="underline underline-offset-4 hover:text-foreground"
@@ -268,3 +241,4 @@ function DashboardPage() {
     </AppShell>
   )
 }
+

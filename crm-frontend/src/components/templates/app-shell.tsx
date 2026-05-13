@@ -188,7 +188,7 @@ export function AppShell({
       <div className="flex-1 flex flex-col min-w-0 md:ml-60 lg:ml-64">
 
         {/* Topbar solo en móvil */}
-        <header className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-card/95 backdrop-blur px-4 py-3">
+        <header className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-2 border-b bg-card/95 backdrop-blur px-3 py-3">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -197,10 +197,10 @@ export function AppShell({
           >
             <Menu className="size-5" />
           </button>
-          <span className="font-black uppercase tracking-tight text-primary text-sm">{title}</span>
-          <div className="flex items-center gap-2">
+          <span className="font-black uppercase tracking-tight text-primary text-sm truncate">{title}</span>
+          <div className="flex min-w-0 items-center gap-2">
             {headerExtras}
-            <span className="text-xs text-muted-foreground truncate max-w-[140px]">{userEmail}</span>
+            <span className="hidden text-xs text-muted-foreground truncate max-w-[120px] sm:inline">{userEmail}</span>
           </div>
         </header>
 

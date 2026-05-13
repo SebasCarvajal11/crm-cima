@@ -9,9 +9,9 @@ import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/molecules/form-field'
 import { SectionIntro } from '@/components/molecules/section-intro'
 import { changePasswordRequest } from '@/auth/auth-api'
-import { authKeys } from '@/auth/query-keys'
 import { parseApiError } from '@/auth/parse-api-error'
 import { strongPasswordSchema } from '@/auth/schemas/password.schema'
+import { useSessionStore } from '@/auth/session-store'
 
 const changePwdSchema = z.object({
   old_password: z.string().min(1, 'Requerido'),
@@ -40,12 +40,13 @@ export function ChangePasswordSection({ accessToken }: Props) {
       } catch (e) { throw new Error(await parseApiError(e), { cause: e }) }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: authKeys.all })
-      reset()
+      queryClient.clear()
+      useSessionStore.getState().clearSession()
+      window.location.assign('/login')
     },
   })
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof changePwdSchema>>({
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof changePwdSchema>>({
     resolver: zodResolver(changePwdSchema),
     defaultValues: { old_password: '', new_password: '', confirm: '' },
   })

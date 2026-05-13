@@ -39,3 +39,23 @@ export async function postInternalChatRequest(
     .post(`projects/${projectId}/chat/internal`, { headers: bearer(accessToken), json: body })
     .json<DataResponse<ProjectChatMessage>>()
 }
+
+export async function markExternalChatReadRequest(
+  accessToken: string,
+  projectId: string,
+  body: { up_to_message_id?: string; message_ids?: string[] }
+) {
+  return api
+    .post(`projects/${projectId}/chat/external/read`, { headers: bearer(accessToken), json: body })
+    .json()
+}
+
+export async function markInternalChatReadRequest(
+  accessToken: string,
+  projectId: string,
+  body: { up_to_message_id?: string; message_ids?: string[] }
+) {
+  return api
+    .post(`projects/${projectId}/chat/internal/read`, { headers: bearer(accessToken), json: body })
+    .json()
+}

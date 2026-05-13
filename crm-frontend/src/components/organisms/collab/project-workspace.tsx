@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowLeft, FileText, FolderOpen, KanbanSquare, MessageSquare, User, Users } from 'lucide-react'
+import { AlertCircle, ArrowLeft, FileText, KanbanSquare, MessageSquare, User, Users } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ProjectTypeBadge } from '@/components/molecules/project-type-badge'
@@ -9,14 +9,13 @@ import { getProjectWorkspaceRequest, patchTaskRequest } from '@/collab/collab-ap
 import { collabKeys } from '@/collab/query-keys'
 import { PARENT_COLUMNS, PRIORITY_WEIGHT, STATUS_DOT } from './collab.config'
 import { TaskBoard } from './task-board'
-import { ChatPanel } from './chat-panel'
-import { ProjectFiles } from './project-files'
+import { ConversationPanel } from './conversation-panel'
 import { BriefPanel } from './brief-panel'
 import { ProjectMembers } from './project-members'
 import type { Project, ProjectListItem, ProjectTask } from '@/collab/collab.types'
 import type { MeResponse } from '@/auth/auth.types'
 
-type WorkspaceTab = 'board' | 'chat' | 'files' | 'brief' | 'members'
+type WorkspaceTab = 'board' | 'chat' | 'brief' | 'members'
 
 type Props = {
   accessToken: string
@@ -29,7 +28,6 @@ type Props = {
 const TABS: { value: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { value: 'board',   label: 'Tablero',      icon: <KanbanSquare  className="size-4" /> },
   { value: 'chat',    label: 'Conversacion', icon: <MessageSquare className="size-4" /> },
-  { value: 'files',   label: 'Archivos',     icon: <FolderOpen    className="size-4" /> },
   { value: 'brief',   label: 'Brief',        icon: <FileText      className="size-4" /> },
   { value: 'members', label: 'Integrantes',  icon: <Users         className="size-4" /> },
 ]
@@ -53,14 +51,12 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
 
   const boardColumns = useMemo(() => {
     const cols = ws?.board.columns ?? []
-    const sorted = [...cols].sort((a, b) => a.position - b.position)
-    return isClient ? sorted.filter((c) => c.isClientVisible) : sorted
-  }, [ws, isClient])
+    return [...cols].sort((a, b) => a.position - b.position)
+  }, [ws])
 
   const boardTasks = useMemo(() => {
-    const tasks = ws?.board.tasks ?? []
-    return isClient ? tasks.filter((t) => t.isClientVisible) : tasks
-  }, [ws, isClient])
+    return ws?.board.tasks ?? []
+  }, [ws])
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, ProjectTask[]> = {}
@@ -186,13 +182,15 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
         )}
         {activeTab === 'chat' && (
           <div id="tabpanel-chat" role="tabpanel">
-            <ChatPanel accessToken={accessToken} projectId={projectId} identity={identity}
-              isClient={isClient} onError={setErrorMsg} />
-          </div>
-        )}
-        {activeTab === 'files' && (
-          <div id="tabpanel-files" role="tabpanel">
-            <ProjectFiles accessToken={accessToken} projectId={projectId} />
+            <ConversationPanel
+              accessToken={accessToken}
+              projectId={projectId}
+              identity={identity}
+              isClient={isClient}
+              members={ws?.members ?? []}
+              tasks={boardTasks}
+              onError={setErrorMsg}
+            />
           </div>
         )}
         {activeTab === 'brief' && (

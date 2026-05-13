@@ -4,7 +4,6 @@ import type {
   Project,
   ProjectBrief,
   ProjectChangeRequest,
-  ProjectFile,
   ProjectFileEnriched,
   ProjectListItem,
   ProjectWorkspaceResponse,
@@ -74,18 +73,52 @@ export async function updateBriefRequest(
   return api.patch(`projects/${projectId}/brief`, { headers: bearer(accessToken), json: body }).json<DataResponse<ProjectBrief>>()
 }
 
-export async function listFilesRequest(
-  accessToken: string,
-  projectId: string
-): Promise<DataResponse<ProjectFile[]>> {
-  return api.get(`projects/${projectId}/files`, { headers: bearer(accessToken) }).json<DataResponse<ProjectFile[]>>()
-}
-
 export async function listProjectFilesEnrichedRequest(
   accessToken: string,
   projectId: string
 ): Promise<DataResponse<ProjectFileEnriched[]>> {
   return api.get(`projects/${projectId}/files`, { headers: bearer(accessToken) }).json<DataResponse<ProjectFileEnriched[]>>()
+}
+
+export async function listProjectFilesTimelineRequest(
+  accessToken: string,
+  projectId: string
+): Promise<DataResponse<ProjectFileEnriched[]>> {
+  return api.get(`projects/${projectId}/files/timeline`, { headers: bearer(accessToken) }).json<DataResponse<ProjectFileEnriched[]>>()
+}
+
+export async function uploadProjectConversationFileRequest(
+  accessToken: string,
+  projectId: string,
+  body: {
+    file: File
+    title: string
+    description?: string
+    taskId?: string | null
+    isClientVisible: boolean
+    channel: 'internal' | 'external'
+  }
+) {
+  const form = new FormData()
+  form.append('file', body.file)
+  form.append('title', body.title)
+  if (body.description?.trim()) form.append('description', body.description.trim())
+  if (body.taskId) form.append('task_id', body.taskId)
+  form.append('is_client_visible', String(body.isClientVisible))
+  form.append('channel', body.channel)
+  return api.post(`projects/${projectId}/files/upload`, { headers: bearer(accessToken), body: form }).json()
+}
+
+export async function deleteProjectFileRequest(accessToken: string, fileId: string) {
+  return api.delete(`files/${fileId}`, { headers: bearer(accessToken) }).json()
+}
+
+export async function updateProjectFileRequest(
+  accessToken: string,
+  fileId: string,
+  body: { title?: string; description?: string | null; task_id?: string | null; is_client_visible?: boolean }
+) {
+  return api.patch(`files/${fileId}`, { headers: bearer(accessToken), json: body }).json()
 }
 
 export async function createMinorChangeRequestRequest(

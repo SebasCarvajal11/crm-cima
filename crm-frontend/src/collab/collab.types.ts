@@ -91,6 +91,11 @@ export type ProjectChatMessage = {
   mentionedSubs: string[] | null
   metadata: Record<string, unknown> | null
   createdAt: string
+  readStatus?: {
+    isSeen: boolean
+    requiredCount: number
+    seenCount: number
+  }
 }
 
 export type ProjectWorkspaceResponse = {

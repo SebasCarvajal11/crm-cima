@@ -61,6 +61,14 @@ async function retryWithRefreshedToken(request: Request, token: string) {
   return api(request, { headers, credentials: 'include' })
 }
 
+function extractBearerToken(headerValue: string | null): string | null {
+  if (!headerValue) return null
+  const [scheme, token] = headerValue.split(' ')
+  if (!scheme || !token) return null
+  if (scheme.toLowerCase() !== 'bearer') return null
+  return token
+}
+
 /** Cliente HTTP hacia el API Gateway (KrakenD): rutas sin prefijo `/api`. */
 export const api = ky.create({
   prefix: getApiBaseUrl(),
@@ -68,6 +76,19 @@ export const api = ky.create({
   timeout: 30_000,
   retry: { limit: 0 },
   hooks: {
+    beforeRequest: [
+      ({ request }) => {
+        const authHeader = request.headers.get('authorization')
+        const requestToken = extractBearerToken(authHeader)
+        if (!requestToken) return
+
+        const currentToken = useSessionStore.getState().token
+        if (!currentToken || currentToken !== requestToken) {
+          // Bloquea fugas: request autenticada con token viejo de otra sesion.
+          throw new Error('Sesion invalida o token obsoleto para la solicitud actual')
+        }
+      },
+    ],
     afterResponse: [
       async ({ request, response }) => {
         if (!shouldAttemptRefresh(request, response)) return response

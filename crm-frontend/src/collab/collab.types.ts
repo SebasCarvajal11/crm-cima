@@ -44,6 +44,11 @@ export type ProjectMember = {
   userSub: string
   role: ProjectMemberRole
   email: string | null
+  first_name: string | null
+  last_name: string | null
+  client_kind: 'natural' | 'juridical' | null
+  company_name: string | null
+  profession: string | null
   taskCount: number
   createdAt: string
   updatedAt: string
@@ -87,6 +92,10 @@ export type ProjectChatMessage = {
   messageType: 'text' | 'minor_request' | 'formal_request' | 'milestone'
   authorSub: string | null
   authorEmail: string | null
+  authorFirstName: string | null
+  authorLastName: string | null
+  authorRole: string | null
+  authorProfession: string | null
   body: string
   mentionedSubs: string[] | null
   metadata: Record<string, unknown> | null

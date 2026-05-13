@@ -37,15 +37,28 @@ const getAvatarColor = (sub: string | null): string => {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
-const getInitials = (email: string | null): string => {
-  if (!email) return '?'
-  const name = email.split('@')[0]
-  const parts = name.split(/[._\-+]/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return name.slice(0, 2).toUpperCase()
+const getInitials = (msg: ProjectChatMessage): string => {
+  const full = `${msg.authorFirstName ?? ''} ${msg.authorLastName ?? ''}`.trim()
+  if (full) {
+    const parts = full.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  if (!msg.authorEmail) return '?'
+  return msg.authorEmail.slice(0, 2).toUpperCase()
 }
 
-const getDisplayName = (email: string | null): string => !email ? 'Sistema' : email.split('@')[0]
+const getDisplayName = (msg: ProjectChatMessage): string => {
+  const full = `${msg.authorFirstName ?? ''} ${msg.authorLastName ?? ''}`.trim()
+  return full || msg.authorEmail || 'Sistema'
+}
+
+const getAuthorTag = (msg: ProjectChatMessage): string => {
+  if (msg.authorRole === 'worker' && msg.authorProfession) return `Worker · ${msg.authorProfession}`
+  if (msg.authorRole === 'admin') return 'Administrador'
+  if (msg.authorRole === 'client') return 'Cliente'
+  return 'Sistema'
+}
 
 const formatMessageTime = (iso: string): string => {
   const date = new Date(iso)
@@ -152,9 +165,13 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, members,
           if (isSystem) return <div key={msg.id} className="flex justify-center py-2"><span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/60 border rounded-full px-3 py-1"><MessageSquare className="size-3 shrink-0" />{msg.body}<span className="opacity-60 ml-1">{formatMessageTime(msg.createdAt)}</span></span></div>
           return (
             <div key={msg.id} className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} ${isLast ? 'mb-3' : 'mb-0.5'}`}>
-              {!isOwn && <div className={`shrink-0 size-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold select-none ${getAvatarColor(msg.authorSub)} ${isLast ? 'opacity-100' : 'opacity-0'}`} aria-hidden={!isLast} title={msg.authorEmail ?? undefined}>{getInitials(msg.authorEmail)}</div>}
+              {!isOwn && <div className={`shrink-0 size-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold select-none ${getAvatarColor(msg.authorSub)} ${isLast ? 'opacity-100' : 'opacity-0'}`} aria-hidden={!isLast} title={msg.authorEmail ?? undefined}>{getInitials(msg)}</div>}
               <div className={`flex flex-col max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                {!isOwn && isFirst && <span className="text-[11px] font-semibold text-muted-foreground px-3 mb-0.5">{getDisplayName(msg.authorEmail)}</span>}
+                {!isOwn && isFirst && (
+                  <span className="text-[11px] font-semibold text-muted-foreground px-3 mb-0.5">
+                    {getDisplayName(msg)} · {getAuthorTag(msg)}
+                  </span>
+                )}
                 <div className={`px-3.5 py-2 shadow-sm text-sm leading-relaxed break-words ${isOwn ? `bg-primary text-primary-foreground ${isFirst ? 'rounded-t-2xl' : 'rounded-t-md'} rounded-bl-2xl rounded-br-sm` : `bg-muted ${isFirst ? 'rounded-t-2xl' : 'rounded-t-md'} rounded-br-2xl rounded-bl-sm`}`}>{msg.body}</div>
                 {isLast && (
                   <span className="text-[10px] text-muted-foreground px-1 mt-1 inline-flex items-center gap-1">

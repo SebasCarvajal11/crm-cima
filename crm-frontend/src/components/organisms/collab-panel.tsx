@@ -32,7 +32,7 @@ export function CollabPanel({ accessToken, identity, initialProjects }: Props) {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
   const [showModal,     setShowModal]     = useState(false)
 
-  const canCreate = identity.role !== 'client'
+  const canCreate = identity.role === 'admin'
 
   const projectsQ = useQuery({
     queryKey: collabKeys.projects(),

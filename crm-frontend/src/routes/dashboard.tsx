@@ -23,7 +23,6 @@ import { AdminConsole } from '@/components/organisms/admin-console'
 import { CollabPanel } from '@/components/organisms/collab-panel'
 import { useSessionStore } from '@/auth/session-store'
 import { logoutRequest } from '@/auth/auth-api'
-import { authKeys } from '@/auth/query-keys'
 import { fetchDashboardBff } from '@/bff/bff-api'
 import { bffKeys } from '@/bff/query-keys'
 
@@ -78,8 +77,7 @@ function DashboardPage() {
     if (!err || !isHTTPError(err)) return
     if (err.response.status === 401) {
       clearSession()
-      void queryClient.removeQueries({ queryKey: authKeys.all })
-      void queryClient.removeQueries({ queryKey: bffKeys.all })
+      queryClient.clear()
       navigate({ to: '/login' })
     }
   }, [dashboardQuery.error, clearSession, navigate, queryClient])
@@ -106,8 +104,7 @@ function DashboardPage() {
     },
     onSettled: () => {
       clearSession()
-      void queryClient.removeQueries({ queryKey: authKeys.all })
-      void queryClient.removeQueries({ queryKey: bffKeys.all })
+      queryClient.clear()
       navigate({ to: '/login' })
     },
   })

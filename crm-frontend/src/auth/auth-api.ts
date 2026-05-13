@@ -154,7 +154,7 @@ export async function requestEmailVerificationRequest(
 
 export async function registerWorkerRequest(
   accessToken: string,
-  body: { email: string }
+  body: { email: string; first_name: string; last_name: string; profession: string }
 ): Promise<RegisterWorkerResponse> {
   return api
     .post('admin/workers', {
@@ -166,7 +166,13 @@ export async function registerWorkerRequest(
 
 export async function inviteClientRequest(
   accessToken: string,
-  body: { email: string }
+  body: {
+    email: string
+    first_name: string
+    last_name: string
+    client_kind: 'natural' | 'juridical'
+    company_name?: string
+  }
 ): Promise<InviteClientResponse> {
   return api
     .post('admin/clients/invite', {

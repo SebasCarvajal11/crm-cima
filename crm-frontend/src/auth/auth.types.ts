@@ -25,6 +25,11 @@ export type MeResponse = {
     id: string
     email: string
     role: UserRole
+    first_name: string | null
+    last_name: string | null
+    client_kind: 'natural' | 'juridical' | null
+    company_name: string | null
+    profession: string | null
     emailVerifiedAt: string | null
     force_password_change?: boolean
   }
@@ -58,6 +63,10 @@ export type ForgotPasswordResponse = {
 export type InvitePreviewResponse = {
   data: {
     email: string
+    first_name: string | null
+    last_name: string | null
+    client_kind: 'natural' | 'juridical' | null
+    company_name: string | null
   }
 }
 
@@ -78,6 +87,9 @@ export type RegisterWorkerResponse = {
       id: string
       email: string
       role: UserRole
+      first_name: string | null
+      last_name: string | null
+      profession: string | null
       force_password_change?: boolean
     }
     temp_password?: string
@@ -95,6 +107,11 @@ export type AdminUserRow = {
   id: string
   email: string
   role: UserRole
+  first_name: string | null
+  last_name: string | null
+  client_kind: 'natural' | 'juridical' | null
+  company_name: string | null
+  profession: string | null
   is_active: boolean
   deleted_at: string | null
   force_password_change: boolean

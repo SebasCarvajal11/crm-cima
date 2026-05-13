@@ -32,6 +32,8 @@ export function LoginForm() {
       }
     },
     onSuccess: (data, variables) => {
+      // Aislamiento estricto entre sesiones/roles en el mismo navegador.
+      queryClient.clear()
       setSession(data.data.access_token, variables.email)
       void queryClient.invalidateQueries({ queryKey: authKeys.all })
       navigate({ to: '/dashboard' })

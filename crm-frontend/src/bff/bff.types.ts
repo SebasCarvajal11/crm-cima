@@ -7,6 +7,11 @@ export type DashboardBffResponse = {
     email: string
     role: UserRole
     id: string
+    first_name: string | null
+    last_name: string | null
+    client_kind: 'natural' | 'juridical' | null
+    company_name: string | null
+    profession: string | null
     emailVerifiedAt: string | null
     force_password_change?: boolean
   }

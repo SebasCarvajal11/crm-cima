@@ -22,6 +22,7 @@ type Props = {
   identity: MeResponse['data']
   projectId: string
   projectMeta: Project | ProjectListItem | null
+  initialChatChannel?: 'internal' | 'external'
   onBack: () => void
 }
 
@@ -33,8 +34,8 @@ const TABS: { value: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
 ]
 
 /** Organismo: workspace de un proyecto (tablero hijo + tabs de conversacion, archivos y brief). */
-export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('board')
+export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, initialChatChannel, onBack }: Props) {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialChatChannel ? 'chat' : 'board')
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -187,6 +188,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               projectId={projectId}
               identity={identity}
               isClient={isClient}
+              initialChannel={initialChatChannel}
               members={ws?.members ?? []}
               tasks={boardTasks}
               onError={setErrorMsg}

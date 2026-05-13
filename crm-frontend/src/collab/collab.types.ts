@@ -203,3 +203,16 @@ export type ProjectChangeRequest = {
 export type DataResponse<T> = {
   data: T
 }
+
+export type ChatMentionNotification = {
+  id: string
+  project_id: string
+  project_name: string
+  message_id: string
+  channel: 'internal' | 'external' | 'system'
+  created_at: string
+  message_preview: string
+  author_sub: string | null
+  author_email: string | null
+  author_name: string
+}

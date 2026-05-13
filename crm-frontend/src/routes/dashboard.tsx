@@ -21,6 +21,7 @@ import { DashboardOverview } from '@/components/organisms/dashboard-overview'
 import { AccountPanel } from '@/components/organisms/account-panel'
 import { AdminConsole } from '@/components/organisms/admin-console'
 import { CollabPanel } from '@/components/organisms/collab-panel'
+import { MentionNotifications } from '@/components/organisms/mention-notifications'
 import { useSessionStore } from '@/auth/session-store'
 import { logoutRequest } from '@/auth/auth-api'
 import { fetchDashboardBff } from '@/bff/bff-api'
@@ -30,6 +31,8 @@ type DashboardTab = 'overview' | 'collab' | 'account' | 'admin'
 
 type DashboardSearch = {
   tab?: DashboardTab
+  project_id?: string
+  chat_channel?: 'internal' | 'external'
 }
 
 export const Route = createFileRoute('/dashboard')({
@@ -46,13 +49,17 @@ export const Route = createFileRoute('/dashboard')({
         tab === 'overview' || tab === 'collab' || tab === 'account' || tab === 'admin'
           ? tab
           : undefined,
+      project_id: typeof search.project_id === 'string' ? search.project_id : undefined,
+      chat_channel: search.chat_channel === 'internal' || search.chat_channel === 'external'
+        ? search.chat_channel
+        : undefined,
     }
   },
   component: DashboardPage,
 })
 
 function DashboardPage() {
-  const { tab } = Route.useSearch()
+  const { tab, project_id, chat_channel } = Route.useSearch()
   const token = useSessionStore((s) => s.token)
   const emailStored = useSessionStore((s) => s.email)
   const clearSession = useSessionStore((s) => s.clearSession)
@@ -115,6 +122,19 @@ function DashboardPage() {
       search: (prev) => ({ ...prev, tab: next }),
       replace: true,
     })
+
+  const goToMention = (payload: { projectId: string; channel: 'internal' | 'external' | 'system' }) => {
+    navigate({
+      to: '/dashboard',
+      search: (prev) => ({
+        ...prev,
+        tab: 'collab',
+        project_id: payload.projectId,
+        chat_channel: payload.channel === 'internal' ? 'internal' : 'external',
+      }),
+      replace: true,
+    })
+  }
 
   // ── Estados de carga / error antes de tener identity ──
   if (isUnauthorized) {
@@ -207,6 +227,12 @@ function DashboardPage() {
       userRole={identity.role}
       onLogout={() => logoutMutation.mutate()}
       isLoggingOut={logoutMutation.isPending}
+      headerExtras={
+        <MentionNotifications
+          accessToken={token}
+          onOpenNotification={goToMention}
+        />
+      }
     >
       {activeTab === 'overview' && (
         <DashboardOverview identity={identity} />
@@ -217,6 +243,8 @@ function DashboardPage() {
           accessToken={token}
           identity={identity}
           initialProjects={projects?.data}
+          initialOpenProjectId={project_id}
+          initialOpenChannel={chat_channel}
         />
       )}
 

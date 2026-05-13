@@ -24,6 +24,7 @@ type Props = {
   projectId: string
   identity: MeResponse['data']
   isClient: boolean
+  initialChannel?: Channel
   members: ProjectMember[]
   onError: (msg: string) => void
 }
@@ -76,9 +77,9 @@ const isSameBlock = (a: ProjectChatMessage, b: ProjectChatMessage): boolean => {
   return Math.abs(new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) < 3 * 60 * 1000
 }
 
-export function ChatPanel({ accessToken, projectId, identity, isClient, members, onError }: Props) {
+export function ChatPanel({ accessToken, projectId, identity, isClient, initialChannel, members, onError }: Props) {
   const queryClient = useQueryClient()
-  const [channel, setChannel] = useState<Channel>('external')
+  const [channel, setChannel] = useState<Channel>(initialChannel ?? 'external')
   const [body, setBody] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -93,6 +94,7 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, members,
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length])
   useEffect(() => { setActiveIdx(0) }, [mentionQuery?.query, mentionSuggestions.length])
+  useEffect(() => { if (initialChannel) setChannel(initialChannel) }, [initialChannel])
 
   useEffect(() => {
     if (!messages.length) return

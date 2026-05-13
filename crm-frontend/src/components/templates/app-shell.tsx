@@ -19,6 +19,7 @@ type AppShellProps = {
   userRole: string
   onLogout: () => void
   isLoggingOut?: boolean
+  headerExtras?: React.ReactNode
   children: React.ReactNode
   className?: string
 }
@@ -108,6 +109,7 @@ export function AppShell({
   userRole,
   onLogout,
   isLoggingOut = false,
+  headerExtras,
   children,
   className,
 }: AppShellProps) {
@@ -133,6 +135,7 @@ export function AppShell({
       >
         <div className="flex items-center gap-2 px-5 py-5 border-b border-primary-foreground/10">
           {brand}
+          {headerExtras ? <div className="ml-auto">{headerExtras}</div> : null}
         </div>
         <SidebarNav items={sidebarItems} onItemClick={() => {}} />
         <SidebarFooter
@@ -195,7 +198,10 @@ export function AppShell({
             <Menu className="size-5" />
           </button>
           <span className="font-black uppercase tracking-tight text-primary text-sm">{title}</span>
-          <span className="text-xs text-muted-foreground truncate max-w-[140px]">{userEmail}</span>
+          <div className="flex items-center gap-2">
+            {headerExtras}
+            <span className="text-xs text-muted-foreground truncate max-w-[140px]">{userEmail}</span>
+          </div>
         </header>
 
         {/* Contenido */}

@@ -12,12 +12,13 @@ type Props = {
   projectId: string
   identity: MeResponse['data']
   isClient: boolean
+  initialChannel?: 'internal' | 'external'
   members: ProjectMember[]
   tasks: ProjectTask[]
   onError: (msg: string) => void
 }
 
-export function ConversationPanel({ accessToken, projectId, identity, isClient, members, tasks, onError }: Props) {
+export function ConversationPanel({ accessToken, projectId, identity, isClient, initialChannel, members, tasks, onError }: Props) {
   const canManageFiles = identity.role === 'admin' || identity.role === 'worker'
 
   const filesQ = useQuery({
@@ -29,7 +30,7 @@ export function ConversationPanel({ accessToken, projectId, identity, isClient, 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div className="min-w-0">
-        <ChatPanel accessToken={accessToken} projectId={projectId} identity={identity} isClient={isClient} members={members} onError={onError} />
+        <ChatPanel accessToken={accessToken} projectId={projectId} identity={identity} isClient={isClient} initialChannel={initialChannel} members={members} onError={onError} />
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm p-4 space-y-4">

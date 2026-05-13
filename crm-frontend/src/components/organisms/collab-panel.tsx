@@ -2,7 +2,7 @@
  * Panel de Colaboracion — entry point del modulo kanban.
  * Renderiza el tablero padre (proyectos) o el workspace hijo (proyecto abierto).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -25,12 +25,15 @@ type Props = {
   identity: MeResponse['data']
   /** Proyectos precargados desde el BFF /bff/dashboard (opcional). */
   initialProjects?: ProjectListItem[]
+  initialOpenProjectId?: string
+  initialOpenChannel?: 'internal' | 'external'
 }
 
 /** Organismo raiz del panel de colaboracion. Gestiona la navegacion entre tablero padre y workspace. */
-export function CollabPanel({ accessToken, identity, initialProjects }: Props) {
+export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialOpenChannel }: Props) {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
   const [showModal,     setShowModal]     = useState(false)
+  const [initialJumpUsed, setInitialJumpUsed] = useState(false)
 
   const canCreate = identity.role === 'admin'
 
@@ -40,6 +43,13 @@ export function CollabPanel({ accessToken, identity, initialProjects }: Props) {
     initialData: initialProjects ? { data: initialProjects } : undefined,
   })
   const projects = projectsQ.data?.data ?? []
+
+  useEffect(() => {
+    if (initialJumpUsed) return
+    if (!initialOpenProjectId) return
+    setOpenProjectId(initialOpenProjectId)
+    setInitialJumpUsed(true)
+  }, [initialJumpUsed, initialOpenProjectId])
 
   const grouped = useMemo(() => {
     const map: Record<ParentProjectStatus, ProjectListItem[]> = {
@@ -59,6 +69,7 @@ export function CollabPanel({ accessToken, identity, initialProjects }: Props) {
         identity={identity}
         projectId={openProjectId}
         projectMeta={projects.find((p) => p.id === openProjectId) ?? null}
+        initialChatChannel={initialOpenChannel}
         onBack={() => setOpenProjectId(null)}
       />
     )

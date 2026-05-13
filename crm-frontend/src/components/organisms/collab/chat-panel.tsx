@@ -85,8 +85,16 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const externalQ = useQuery({ queryKey: collabKeys.chatExternal(projectId), queryFn: () => listExternalChatRequest(accessToken, projectId) })
-  const internalQ = useQuery({ queryKey: collabKeys.chatInternal(projectId), queryFn: () => listInternalChatRequest(accessToken, projectId), enabled: !isClient })
+  const externalQ = useQuery({
+    queryKey: collabKeys.chatExternal(projectId),
+    queryFn: () => listExternalChatRequest(accessToken, projectId),
+    enabled: channel === 'external',
+  })
+  const internalQ = useQuery({
+    queryKey: collabKeys.chatInternal(projectId),
+    queryFn: () => listInternalChatRequest(accessToken, projectId),
+    enabled: !isClient && channel === 'internal',
+  })
   const messages = channel === 'external' ? (externalQ.data?.data ?? []) : (internalQ.data?.data ?? [])
 
   const mentionQuery = useMemo(() => extractActiveMentionQuery(body, textareaRef.current?.selectionStart ?? body.length), [body])
@@ -126,9 +134,13 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
         ? postExternalChatRequest(accessToken, projectId, { body, mentions })
         : postInternalChatRequest(accessToken, projectId, { body, mentions })
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const key = channel === 'external' ? collabKeys.chatExternal(projectId) : collabKeys.chatInternal(projectId)
+      queryClient.setQueryData(key, (prev: { data: ProjectChatMessage[] } | undefined) => ({
+        data: [...(prev?.data ?? []), res.data],
+      }))
       setBody('')
-      void queryClient.invalidateQueries({ queryKey: channel === 'external' ? collabKeys.chatExternal(projectId) : collabKeys.chatInternal(projectId) })
+      void queryClient.invalidateQueries({ queryKey: key })
     },
     onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo enviar el mensaje')),
   })

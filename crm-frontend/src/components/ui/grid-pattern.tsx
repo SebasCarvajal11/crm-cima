@@ -9,7 +9,7 @@ interface GridPatternProps {
   squares?: [number, number][]
   strokeDasharray?: string
   className?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export function GridPattern({
@@ -31,7 +31,7 @@ export function GridPattern({
         "pointer-events-none absolute inset-0 h-full w-full fill-gray-400/30 stroke-gray-400/30",
         className,
       )}
-      {...(props as any)}
+      {...(props as React.SVGProps<SVGSVGElement>)}
     >
       <defs>
         <pattern height={height} id={id} patternUnits="userSpaceOnUse" width={width} x={x} y={y}>
@@ -41,14 +41,14 @@ export function GridPattern({
       <rect fill={`url(#${id})`} height="100%" strokeWidth={0} width="100%" />
       {squares && (
         <svg aria-label="Grid squares" className="overflow-visible" role="img" x={x} y={y}>
-          {squares.map(([x, y], index) => (
+          {squares.map(([squareX, squareY]) => (
             <rect
               height={height - 1}
-              key={`${x}-${y}-${index}`}
+              key={`${squareX}-${squareY}`}
               strokeWidth="0"
               width={width - 1}
-              x={x * width + 1}
-              y={y * height + 1}
+              x={squareX * width + 1}
+              y={squareY * height + 1}
             />
           ))}
         </svg>

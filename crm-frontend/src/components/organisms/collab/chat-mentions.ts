@@ -18,7 +18,7 @@ const allowedMentionRolesByActor = (role: UserRole): ProjectMember['role'][] => 
 
 const memberAliases = (member: ProjectMember) => {
   const local = (member.email ?? '').split('@')[0]
-  const parts = local.split(/[._\-+]/).filter(Boolean)
+  const parts = local.split(/[._+-]/).filter(Boolean)
   const aliases = new Set<string>([local, ...parts].filter(Boolean).map(normalize))
   return [...aliases]
 }
@@ -30,7 +30,7 @@ export function mentionHints(actorRole: UserRole): string[] {
 }
 
 export function resolveMentionsFromBody(body: string, actorRole: UserRole, members: ProjectMember[]): string[] {
-  const tokens = [...body.matchAll(/(?:^|\s)@([a-zA-Z0-9._\-]+)/g)].map((m) => normalize(m[1]))
+  const tokens = [...body.matchAll(/(?:^|\s)@([a-zA-Z0-9._-]+)/g)].map((m) => normalize(m[1]))
   if (!tokens.length) return []
 
   const allowedRoles = new Set(allowedMentionRolesByActor(actorRole))
@@ -75,7 +75,7 @@ const memberLabel = (member: ProjectMember) => {
 
 export function extractActiveMentionQuery(text: string, caret: number): { start: number; query: string } | null {
   const upToCaret = text.slice(0, Math.max(0, caret))
-  const match = upToCaret.match(/(^|\s)@([a-zA-Z0-9._\-]*)$/)
+  const match = upToCaret.match(/(^|\s)@([a-zA-Z0-9._-]*)$/)
   if (!match) return null
   const query = match[2] ?? ''
   return { start: upToCaret.length - query.length - 1, query }

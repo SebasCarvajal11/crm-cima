@@ -1,10 +1,12 @@
 import { StrictMode } from 'react'
+import { useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import './index.css'
 
 import { routeTree } from './routeTree.gen'
+import { bindSessionStorageSync, bootstrapSession, useSessionStore } from './auth/session-store'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,10 +28,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+function AppBootstrap() {
+  const bootstrapped = useSessionStore((s) => s.bootstrapped)
+
+  useEffect(() => {
+    bindSessionStorageSync()
+    void bootstrapSession()
+  }, [])
+
+  if (!bootstrapped) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="text-sm text-muted-foreground">Restaurando sesion...</div>
+      </div>
+    )
+  }
+
+  return <RouterProvider router={router} />
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AppBootstrap />
     </QueryClientProvider>
   </StrictMode>,
 )

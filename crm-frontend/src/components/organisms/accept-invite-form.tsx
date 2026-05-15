@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,7 +22,7 @@ const schema = z
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
-    message: 'Las contraseñas no coinciden',
+    message: 'Las contrasenas no coinciden',
     path: ['confirm'],
   })
 
@@ -32,9 +32,10 @@ type AcceptInviteFormProps = {
   token: string
 }
 
-/** Organismo: aceptar invitación y fijar contraseña inicial (gateway). */
+/** Organismo: aceptar invitacion y fijar contrasena inicial (gateway). */
 export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const setSession = useSessionStore((s) => s.setSession)
 
   const previewQuery = useQuery({
@@ -53,6 +54,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
     },
     onSuccess: (data) => {
       setSession(data.data.access_token)
+      void queryClient.invalidateQueries()
       navigate({ to: '/dashboard' })
     },
   })
@@ -78,9 +80,9 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
   if (previewQuery.isError) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>No se pudo cargar la invitación</AlertTitle>
+        <AlertTitle>No se pudo cargar la invitacion</AlertTitle>
         <AlertDescription>
-          El enlace puede haber expirado o ser inválido.
+          El enlace puede haber expirado o ser invalido.
         </AlertDescription>
       </Alert>
     )
@@ -92,11 +94,11 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
     <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
       {email ? (
         <p className="text-sm text-muted-foreground">
-          Invitación para{' '}
+          Invitacion para{' '}
           <span className="font-medium text-foreground">{email}</span>
         </p>
       ) : null}
-      <FormField id="password" label="Contraseña" error={errors.password?.message}>
+      <FormField id="password" label="Contrasena" error={errors.password?.message}>
         <Input type="password" autoComplete="new-password" {...register('password')} />
       </FormField>
       <FormField id="confirm" label="Confirmar" error={errors.confirm?.message}>

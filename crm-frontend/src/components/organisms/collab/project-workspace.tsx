@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, FileText, KanbanSquare, MessageSquare, User, Users } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ProjectTypeBadge } from '@/components/molecules/project-type-badge'
 import { parseApiError } from '@/auth/parse-api-error'
 import {
@@ -29,6 +31,7 @@ type Props = {
   identity: MeResponse['data']
   projectId: string
   projectMeta: Project | ProjectListItem | null
+  initialWorkspaceTab?: WorkspaceTab
   initialChatChannel?: 'internal' | 'external'
   initialChatMessageId?: string
   onBack: () => void
@@ -41,11 +44,16 @@ const TABS: { value: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { value: 'members', label: 'Integrantes',  icon: <Users         className="size-4" /> },
 ]
 
+const FINALIZATION_COLUMN_KEYS = new Set(['done', 'completed'])
+
 /** Organismo: workspace de un proyecto (tablero hijo + tabs de conversacion, archivos y brief). */
-export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, initialChatChannel, initialChatMessageId, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialChatChannel ? 'chat' : 'board')
+export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta, initialWorkspaceTab, initialChatChannel, initialChatMessageId, onBack }: Props) {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialWorkspaceTab ?? (initialChatChannel ? 'chat' : 'board'))
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
+  const [taskSearchText, setTaskSearchText] = useState('')
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const navigate = useNavigate({ from: '/dashboard' })
 
   const isClient   = identity.role === 'client'
   const canOperate = identity.role === 'admin' || identity.role === 'worker'
@@ -64,7 +72,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
       ])
       return {
         brief: briefRes.data ?? null,
-        formalChanges: (formalRes.data ?? []).map((row) => ({
+        formalChanges: (formalRes.data.items ?? []).map((row) => ({
           id: row.id,
           title: row.description,
           status: 'approved',
@@ -81,7 +89,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
 
   const boardColumns = useMemo(() => {
     const cols = boardData?.board.columns ?? []
-    return [...cols].sort((a, b) => a.position - b.position)
+    return cols.toSorted((a, b) => a.position - b.position)
   }, [boardData])
 
   const boardTasks = useMemo(() => {
@@ -89,6 +97,40 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
   }, [boardData])
 
   const members = boardData?.members ?? []
+
+  const searchableTasks = useMemo(() => {
+    const normalized = taskSearchText.trim().toLowerCase()
+    if (normalized.length < 2) return []
+    return boardTasks
+      .filter((task) => {
+        const columnTitle = boardColumns.find((c) => c.id === task.columnId)?.title ?? ''
+        return [
+          task.title,
+          task.description ?? '',
+          task.priority,
+          columnTitle,
+        ].join(' ').toLowerCase().includes(normalized)
+      })
+      .slice(0, 8)
+  }, [boardColumns, boardTasks, taskSearchText])
+
+  useEffect(() => {
+    if (!initialWorkspaceTab) return
+    setActiveTab(initialWorkspaceTab)
+  }, [initialWorkspaceTab])
+
+  useEffect(() => {
+    navigate({
+      to: '/dashboard',
+      search: (prev) => ({
+        ...prev,
+        tab: 'collab',
+        project_id: projectId,
+        workspace_tab: activeTab,
+      }),
+      replace: true,
+    })
+  }, [navigate, projectId, activeTab])
 
   useEffect(() => {
     void queryClient.prefetchQuery({
@@ -113,7 +155,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
         ])
         return {
           brief: briefRes.data ?? null,
-          formalChanges: (formalRes.data ?? []).map((row) => ({
+          formalChanges: (formalRes.data.items ?? []).map((row) => ({
             id: row.id,
             title: row.description,
             status: 'approved',
@@ -144,6 +186,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
       void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
+      void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
     },
     onError: (e) => parseApiError(e).then((m) => setErrorMsg(m || 'No se pudo mover la tarea')),
   })
@@ -152,7 +195,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
   const pct    = project?.progressPercent ?? 0
 
   return (
-    <div className="flex flex-col gap-5 min-h-0">
+    <div className="flex min-h-0 flex-col gap-5">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onBack} aria-label="Volver al tablero de proyectos"
@@ -162,11 +205,11 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
           </Button>
         </div>
 
-        <div className="rounded-xl border bg-card shadow-sm px-4 py-3">
+        <div className="rounded-2xl border bg-card px-4 py-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                <h1 className="text-base font-bold truncate leading-tight">{project?.name ?? '…'}</h1>
+                <h1 className="text-base font-semibold truncate leading-tight">{project?.name ?? '…'}</h1>
                 {project?.type && (
                   <ProjectTypeBadge type={project.type} className="hidden sm:inline-flex" />
                 )}
@@ -188,7 +231,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               <div className="flex items-center gap-2 shrink-0" role="progressbar"
                 aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Progreso: ${pct}%`}>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-sm font-bold leading-none">{pct}%</span>
+                  <span className="text-sm font-semibold leading-none">{pct}%</span>
                   <div className="w-20 sm:w-28 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full transition-all duration-500"
                       style={{ width: `${Math.max(pct > 0 ? 4 : 0, pct)}%` }} />
@@ -208,26 +251,68 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
         </Alert>
       )}
 
-      <div className="flex flex-row items-center gap-0.5 border-b overflow-x-auto" role="tablist" aria-label="Secciones del proyecto">
+      <div
+        className="flex items-center gap-1 overflow-x-auto rounded-2xl border bg-card p-1 shadow-sm"
+        role="tablist"
+        aria-label="Secciones del proyecto"
+      >
         {TABS.map((tab) => (
           <button key={tab.value} type="button" role="tab" aria-selected={activeTab === tab.value}
             aria-controls={`tabpanel-${tab.value}`} onClick={() => setActiveTab(tab.value)}
             className={[
-              'flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-t-md whitespace-nowrap shrink-0',
+              'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
               activeTab === tab.value
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             ].join(' ')}>
             <span aria-hidden="true">{tab.icon}</span>
-            <span className="hidden sm:inline">{tab.label}</span>
+            <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
-      <div className="mt-1">
+      <div className="min-h-0">
         {activeTab === 'board' && (
           <div id="tabpanel-board" role="tabpanel" aria-label="Tablero de tareas">
+            <div className="mb-4 rounded-2xl border bg-card p-3 shadow-sm">
+              <div className="mb-2">
+                <h3 className="text-sm font-semibold">Buscar tareas</h3>
+                <p className="text-xs text-muted-foreground">Filtra por nombre, descripcion o columna del tablero.</p>
+              </div>
+              <div className="relative max-w-md">
+                <Input
+                  value={taskSearchText}
+                  onChange={(e) => setTaskSearchText(e.target.value)}
+                  placeholder="Buscar tareas por nombre, descripcion o columna"
+                  aria-label="Buscar tareas del proyecto"
+                />
+                {taskSearchText.trim().length >= 2 && (
+                  <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md">
+                    {searchableTasks.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Sin tareas coincidentes</p>
+                    )}
+                    {searchableTasks.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        className="w-full px-3 py-2 text-left transition-colors hover:bg-accent"
+                        onClick={() => {
+                          setTaskSearchText('')
+                          setFocusedTaskId(task.id)
+                        }}
+                      >
+                        <p className="truncate text-sm font-medium">{task.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {boardColumns.find((c) => c.id === task.columnId)?.title ?? 'Sin columna'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <TaskBoard
+              key={focusedTaskId ?? 'board-default'}
               accessToken={accessToken}
               projectId={projectId}
               columns={boardColumns}
@@ -236,14 +321,24 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               members={members}
               canOperate={canOperate}
               isLoading={boardQ.isLoading}
-              onMoveTask={(taskId, targetColumnId) =>
+              onMoveTask={(taskId, targetColumnId) => {
+                setErrorMsg(null)
+                const task = boardTasks.find((item) => item.id === taskId)
+                const targetColumn = boardColumns.find((column) => column.id === targetColumnId)
+                const hasSubtasks = (task?.subtasks?.length ?? 0) > 0
+                if (task && targetColumn && FINALIZATION_COLUMN_KEYS.has(targetColumn.key) && hasSubtasks && task.checklistProgress < 100) {
+                  setErrorMsg('No puedes mover la tarea a la columna final sin completar todas las subtareas')
+                  return
+                }
                 moveTask.mutate({ taskId, targetColumnId, position: (tasksByColumn[targetColumnId] ?? []).length })
-              }
+              }}
               onTaskSaved={() => {
                 void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
                 void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
+                void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
               }}
               onError={setErrorMsg}
+              focusedTaskId={focusedTaskId}
             />
           </div>
         )}
@@ -278,6 +373,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
               isLoading={boardQ.isLoading}
               accessToken={accessToken}
               projectId={projectId}
+              identity={identity}
               canManageMembers={identity.role === 'admin'}
               onError={setErrorMsg}
             />

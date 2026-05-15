@@ -9,12 +9,16 @@ import { listProjectMembersRequest, upsertProjectMemberRequest } from '@/collab/
 import { collabKeys } from '@/collab/query-keys'
 import type { ProjectMember, ProjectMemberRole } from '@/collab/collab.types'
 import type { ClientSearchResult } from '@/auth/auth-api'
+import type { MeResponse } from '@/auth/auth.types'
+import { getCurrentAvatarRequest, getUserAvatarsRequest } from '@/media/media-api'
+import { pickAvatarUrl } from '@/media/avatar-utils'
 
 type Props = {
   members: ProjectMember[]
   isLoading: boolean
   accessToken: string
   projectId: string
+  identity: MeResponse['data']
   canManageMembers: boolean
   onError: (msg: string) => void
 }
@@ -91,7 +95,7 @@ function getRelativeActivityLabel(iso: string | null) {
   return `Hace ${Math.floor(days / 365)} ano${Math.floor(days / 365) === 1 ? '' : 's'}`
 }
 
-export function ProjectMembers({ members, isLoading, accessToken, projectId, canManageMembers, onError }: Props) {
+export function ProjectMembers({ members, isLoading, accessToken, projectId, identity, canManageMembers, onError }: Props) {
   const queryClient = useQueryClient()
   const [selectedWorkers, setSelectedWorkers] = useState<ClientSearchResult[]>([])
 
@@ -103,6 +107,22 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, can
   })
 
   const resolvedMembers = membersQ.data?.data ?? members
+  const avatarSubjects = Array.from(new Set(resolvedMembers.map((m) => m.userSub)))
+  const avatarsQ = useQuery({
+    queryKey: ['media', 'avatars', 'users', projectId, avatarSubjects.join(',')],
+    queryFn: () => getUserAvatarsRequest(accessToken, avatarSubjects),
+    enabled: avatarSubjects.length > 0,
+    staleTime: 60_000,
+  })
+  const avatarBySub = avatarsQ.data?.data.items ?? {}
+  const currentAvatarQ = useQuery({
+    queryKey: ['media', 'avatar', 'current', accessToken],
+    queryFn: () => getCurrentAvatarRequest(accessToken),
+    enabled: Boolean(accessToken),
+    retry: false,
+    staleTime: 60_000,
+  })
+  const currentUserAvatarUrl = pickAvatarUrl(currentAvatarQ.data?.data.urls, '64')
 
   const addWorker = useMutation({
     mutationFn: async () => {
@@ -140,7 +160,7 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, can
   return (
     <div className="space-y-6">
       {canManageMembers && (
-        <div className="space-y-3 rounded-xl border bg-card p-4">
+        <div className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Agregar trabajador</h3>
             <Button size="sm" onClick={() => addWorker.mutate()} disabled={filteredSelection.length === 0 || addWorker.isPending}>
@@ -171,7 +191,7 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, can
         </div>
       )}
 
-      <div className="rounded-xl border bg-muted/40 p-4">
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           {(['admin', 'worker', 'client'] as ProjectMemberRole[]).map((role) => {
             const count = byRole[role].length
@@ -209,11 +229,17 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, can
               {group.map((member) => {
                 const displayName = getDisplayName(member)
                 const showEmailLine = Boolean(member.email && member.email !== displayName)
+                const fallbackToCurrentUserAvatar = member.email === identity.email ? currentUserAvatarUrl : null
+                const memberAvatarUrl = pickAvatarUrl(avatarBySub[member.userSub]?.urls, '64') ?? fallbackToCurrentUserAvatar
                 return (
                   <article key={member.userSub} className={`rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-shadow hover:shadow-md ${cfg.cardClass}`}>
                     <div className="flex items-start gap-3">
-                      <div className={`${getAvatarColor(member.userSub)} flex size-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-bold text-white`}>
-                        {getInitials(member)}
+                      <div className={`${getAvatarColor(member.userSub)} flex size-10 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white`}>
+                        {memberAvatarUrl ? (
+                          <img src={memberAvatarUrl} alt={`Avatar de ${displayName}`} className="size-10 object-cover" />
+                        ) : (
+                          getInitials(member)
+                        )}
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="truncate text-sm font-semibold" title={displayName}>{displayName}</p>

@@ -4,11 +4,13 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { listProjectsRequest } from '@/collab/collab-api'
+import { listProjectsRequest, searchProjectsRequest } from '@/collab/collab-api'
 import { collabKeys } from '@/collab/query-keys'
 import { PARENT_COLUMNS } from './collab/collab.config'
 import { ProjectCard } from './collab/project-card'
@@ -26,24 +28,41 @@ type Props = {
   /** Proyectos precargados desde el BFF /bff/dashboard (opcional). */
   initialProjects?: ProjectListItem[]
   initialOpenProjectId?: string
+  initialWorkspaceTab?: 'board' | 'chat' | 'brief' | 'members'
   initialOpenChannel?: 'internal' | 'external'
   initialOpenMessageId?: string
 }
 
 /** Organismo raiz del panel de colaboracion. Gestiona la navegacion entre tablero padre y workspace. */
-export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialOpenChannel, initialOpenMessageId }: Props) {
+export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialWorkspaceTab, initialOpenChannel, initialOpenMessageId }: Props) {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
   const [showModal,     setShowModal]     = useState(false)
   const [initialJumpUsed, setInitialJumpUsed] = useState(false)
+  const [projectSearchText, setProjectSearchText] = useState('')
+  const [projectSearchDebounced, setProjectSearchDebounced] = useState('')
+  const navigate = useNavigate({ from: '/dashboard' })
 
   const canCreate = identity.role === 'admin'
+  const canSearchByClient = identity.role === 'admin' || identity.role === 'worker'
 
   const projectsQ = useQuery({
     queryKey: collabKeys.projects(),
     queryFn:  () => listProjectsRequest(accessToken, { page: 1, limit: 100 }),
     initialData: initialProjects ? { data: initialProjects } : undefined,
   })
-  const projects = projectsQ.data?.data ?? []
+  const projects = projectsQ.data?.data.items ?? []
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setProjectSearchDebounced(projectSearchText.trim()), 180)
+    return () => window.clearTimeout(t)
+  }, [projectSearchText])
+
+  const projectSearchQ = useQuery({
+    queryKey: [...collabKeys.projects(), 'search', identity.role, projectSearchDebounced],
+    queryFn: () => searchProjectsRequest(accessToken, { q: projectSearchDebounced, limit: 8 }),
+    enabled: projectSearchDebounced.length >= 2,
+    staleTime: 20_000,
+  })
 
   useEffect(() => {
     if (initialJumpUsed) return
@@ -51,6 +70,19 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
     setOpenProjectId(initialOpenProjectId)
     setInitialJumpUsed(true)
   }, [initialJumpUsed, initialOpenProjectId])
+
+  useEffect(() => {
+    navigate({
+      to: '/dashboard',
+      search: (prev) => ({
+        ...prev,
+        tab: 'collab',
+        project_id: openProjectId ?? undefined,
+        workspace_tab: openProjectId ? prev.workspace_tab : undefined,
+      }),
+      replace: true,
+    })
+  }, [navigate, openProjectId])
 
   const grouped = useMemo(() => {
     const map: Record<ParentProjectStatus, ProjectListItem[]> = {
@@ -70,6 +102,7 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
         identity={identity}
         projectId={openProjectId}
         projectMeta={projects.find((p) => p.id === openProjectId) ?? null}
+        initialWorkspaceTab={initialWorkspaceTab}
         initialChatChannel={initialOpenChannel}
         initialChatMessageId={initialOpenMessageId}
         onBack={() => setOpenProjectId(null)}
@@ -91,12 +124,52 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
             Vista Kanban por estado — haz clic en un proyecto para abrir su workspace
           </p>
         </div>
-        {canCreate && (
-          <Button size="sm" className="shrink-0 self-start" onClick={() => setShowModal(true)}>
-            <Plus className="size-4 mr-1.5" />
-            Nuevo proyecto
-          </Button>
-        )}
+        <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2">
+          {canCreate && (
+            <Button size="sm" className="shrink-0 self-start sm:self-auto" onClick={() => setShowModal(true)}>
+              <Plus className="size-4 mr-1.5" />
+              Nuevo proyecto
+            </Button>
+          )}
+          <div className="relative w-full sm:w-[350px]">
+            <Input
+              value={projectSearchText}
+              onChange={(e) => setProjectSearchText(e.target.value)}
+              placeholder={canSearchByClient ? 'Buscar por proyecto, cliente o correo' : 'Buscar proyecto'}
+              aria-label="Buscar proyectos"
+            />
+            {projectSearchDebounced.length >= 2 && (
+              <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md">
+                {projectSearchQ.isLoading && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">Buscando proyectos...</p>
+                )}
+                {!projectSearchQ.isLoading && (projectSearchQ.data?.data?.length ?? 0) === 0 && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</p>
+                )}
+                {!projectSearchQ.isLoading &&
+                  (projectSearchQ.data?.data ?? []).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="w-full px-3 py-2 text-left hover:bg-accent transition-colors"
+                      onClick={() => {
+                        setProjectSearchText('')
+                        setProjectSearchDebounced('')
+                        setOpenProjectId(p.id)
+                      }}
+                    >
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {canSearchByClient
+                          ? `${p.clientName}${p.clientEmail ? ` - ${p.clientEmail}` : ''}`
+                          : p.clientName}
+                      </p>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {canCreate && (

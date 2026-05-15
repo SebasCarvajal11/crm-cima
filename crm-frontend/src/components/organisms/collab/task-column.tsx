@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Plus, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { TaskCard } from './task-card'
 import type { ProjectTask, ProjectTaskColumn } from '@/collab/collab.types'
 
@@ -16,12 +17,14 @@ type Props = {
   tasks: ProjectTask[]
   selectedTaskId: string | null
   canDrag: boolean
+  canCreateTask: boolean
   onSelectTask: (t: ProjectTask) => void
   onDropTask: (taskId: string) => void
+  onCreateTask: () => void
 }
 
 /** Organismo: columna kanban de tareas con alto fijo y soporte drag-and-drop. */
-export function TaskColumn({ column, tasks, selectedTaskId, canDrag, onSelectTask, onDropTask }: Props) {
+export function TaskColumn({ column, tasks, selectedTaskId, canDrag, canCreateTask, onSelectTask, onDropTask, onCreateTask }: Props) {
   const [isDragOver, setIsDragOver] = useState(false)
 
   return (
@@ -41,9 +44,9 @@ export function TaskColumn({ column, tasks, selectedTaskId, canDrag, onSelectTas
       }}
     >
       {/* Cabecera fija de la columna */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b bg-background/70 rounded-t-xl shrink-0">
-        <h3 className="font-semibold text-sm">{column.title}</h3>
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-2 border-b bg-background/70 px-3 py-2.5 rounded-t-xl shrink-0">
+        <h3 className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight" title={column.title}>{column.title}</h3>
+        <div className="flex shrink-0 items-center gap-1">
           {column.isClientVisible && (
             <span title="Columna visible para el cliente">
               <Users className="size-3 text-muted-foreground" aria-label="Visible para el cliente" />
@@ -52,6 +55,19 @@ export function TaskColumn({ column, tasks, selectedTaskId, canDrag, onSelectTas
           <Badge variant="secondary" className="text-xs min-w-[1.4rem] justify-center">
             {tasks.length}
           </Badge>
+          {canCreateTask && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 rounded-full text-muted-foreground transition-all duration-150 hover:scale-110 hover:bg-primary/10 hover:text-primary focus-visible:scale-110 focus-visible:bg-primary/10 focus-visible:text-primary"
+              onClick={onCreateTask}
+              aria-label={`Crear tarea en ${column.title}`}
+              title={`Nueva tarea en ${column.title}`}
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 

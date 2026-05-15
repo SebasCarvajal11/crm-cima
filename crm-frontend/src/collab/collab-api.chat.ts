@@ -1,14 +1,15 @@
 import { api } from '@/lib/api'
 import { bearer } from './collab-api.projects'
-import type { DataResponse, ProjectChatMessage } from './collab.types'
+import type { DataResponse, PaginatedData, ProjectChatMessage } from './collab.types'
 
 export async function listExternalChatRequest(
   accessToken: string,
-  projectId: string
-): Promise<DataResponse<ProjectChatMessage[]>> {
+  projectId: string,
+  params?: { page?: number; limit?: number }
+): Promise<DataResponse<PaginatedData<ProjectChatMessage>>> {
   return api
     .get(`projects/${projectId}/chat/external`, { headers: bearer(accessToken) })
-    .json<DataResponse<ProjectChatMessage[]>>()
+    .json<DataResponse<PaginatedData<ProjectChatMessage>>>()
 }
 
 export async function postExternalChatRequest(
@@ -23,11 +24,12 @@ export async function postExternalChatRequest(
 
 export async function listInternalChatRequest(
   accessToken: string,
-  projectId: string
-): Promise<DataResponse<ProjectChatMessage[]>> {
+  projectId: string,
+  params?: { page?: number; limit?: number }
+): Promise<DataResponse<PaginatedData<ProjectChatMessage>>> {
   return api
     .get(`projects/${projectId}/chat/internal`, { headers: bearer(accessToken) })
-    .json<DataResponse<ProjectChatMessage[]>>()
+    .json<DataResponse<PaginatedData<ProjectChatMessage>>>()
 }
 
 export async function postInternalChatRequest(

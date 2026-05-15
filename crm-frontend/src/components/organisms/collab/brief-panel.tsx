@@ -33,10 +33,10 @@ export function BriefPanel({ brief, formalChanges, isLoading }: Props) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-      <div className="rounded-xl border bg-card shadow-sm" role="region" aria-label="Brief del proyecto">
-        <div className="px-4 py-3 border-b flex items-center justify-between">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm" role="region" aria-label="Brief del proyecto">
+        <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
-            <h3 className="font-semibold">Brief del Proyecto</h3>
+            <h3 className="text-sm font-semibold">Brief del Proyecto</h3>
             {brief && (
               <p className="text-xs text-muted-foreground mt-0.5">
                 Actualizado:{' '}
@@ -59,12 +59,12 @@ export function BriefPanel({ brief, formalChanges, isLoading }: Props) {
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card shadow-sm" role="region" aria-label="Historial de cambios formales">
-        <div className="px-4 py-3 border-b">
-          <h3 className="font-semibold">Cambios Formales</h3>
+      <div className="flex max-h-[min(600px,70vh)] flex-col overflow-hidden rounded-xl border bg-card shadow-sm" role="region" aria-label="Historial de cambios formales">
+        <div className="border-b px-4 py-3">
+          <h3 className="text-sm font-semibold">Cambios Formales</h3>
           <p className="text-xs text-muted-foreground mt-0.5">Historial de modificaciones de alcance</p>
         </div>
-        <div className="p-3">
+        <div className="flex-1 overflow-y-auto p-3">
           {formalChanges.length === 0 ? (
             <div className="flex flex-col items-center py-8 gap-2 text-muted-foreground">
               <CheckCircle2 className="size-8 opacity-20" aria-hidden="true" />

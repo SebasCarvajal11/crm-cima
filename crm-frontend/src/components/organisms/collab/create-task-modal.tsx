@@ -26,7 +26,7 @@ type Subtask = { id: string; title: string; is_completed: boolean; assignee_sub:
 type Props = {
   accessToken: string
   projectId: string
-  columns: ProjectTaskColumn[]
+  column: ProjectTaskColumn | null
   tasksByColumn: Record<string, ProjectTask[]>
   identity: MeResponse['data']
   members: ProjectMember[]
@@ -39,7 +39,7 @@ type Props = {
 export function CreateTaskModal({
   accessToken,
   projectId,
-  columns,
+  column,
   tasksByColumn,
   identity,
   members,
@@ -52,7 +52,6 @@ export function CreateTaskModal({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<ProjectTask['priority']>('medium')
-  const [columnId, setColumnId] = useState<string>('')
   const [deadline, setDeadline] = useState('')
   const [clientVis, setClientVis] = useState(false)
   const [selectedWorkerSubs, setSelectedWorkerSubs] = useState<string[]>([])
@@ -63,15 +62,12 @@ export function CreateTaskModal({
   const canAssign = identity.role === 'admin' || identity.role === 'worker'
   const workerMembers = members.filter((m) => m.role === 'worker' && Boolean(m.email))
   const selectedWorkers = workerMembers.filter((m) => selectedWorkerSubs.includes(m.userSub))
-
-  useEffect(() => {
-    if (columns.length > 0 && !columnId) setColumnId(columns[0].id)
-  }, [columns, columnId])
+  const columnId = column?.id ?? ''
 
   const createTask = useMutation({
     mutationFn: () =>
       createTaskRequest(accessToken, projectId, {
-        column_id: columnId || columns[0]?.id,
+        column_id: columnId,
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
@@ -79,12 +75,13 @@ export function CreateTaskModal({
         due_date: deadline || undefined,
         client_visible: clientVis,
         checklist_progress: 0,
-        position: (tasksByColumn[columnId || columns[0]?.id] ?? []).length,
+        position: (tasksByColumn[columnId] ?? []).length,
         subtasks,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
       void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
+      void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
       handleClose()
       onCreated()
     },
@@ -103,6 +100,11 @@ export function CreateTaskModal({
     setNewSubtaskAssignee('none')
     onClose()
   }
+
+  useEffect(() => {
+    if (!open) return
+    setPriority('medium')
+  }, [open, columnId])
 
   const canSubmit = title.trim().length >= 2 && !!columnId
 
@@ -132,7 +134,9 @@ export function CreateTaskModal({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva tarea</DialogTitle>
-          <DialogDescription>Completa los datos para crear la tarea en el tablero.</DialogDescription>
+          <DialogDescription>
+            {column ? `Completa los datos para crear la tarea en ${column.title}.` : 'Completa los datos para crear la tarea en el tablero.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="px-6 space-y-4">
@@ -143,13 +147,10 @@ export function CreateTaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="ct-col">Columna <span className="text-destructive">*</span></Label>
-              <Select value={columnId} onValueChange={setColumnId}>
-                <SelectTrigger id="ct-col"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {columns.map((column) => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Columna</Label>
+              <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                {column?.title ?? 'Sin columna'}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ct-pri">Prioridad</Label>

@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { KanbanSquare, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { KanbanSquare } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { TaskColumn } from './task-column'
 import { TaskSheet } from './task-sheet'
@@ -20,17 +19,20 @@ type Props = {
   onMoveTask: (taskId: string, targetColumnId: string) => void
   onTaskSaved: () => void
   onError: (msg: string) => void
+  focusedTaskId?: string | null
 }
 
 /** Organismo: tablero kanban de tareas del proyecto (tablero hijo). */
 export function TaskBoard({
   accessToken, projectId, columns, tasksByColumn, identity, members,
   canOperate, isLoading, onMoveTask, onTaskSaved, onError,
+  focusedTaskId,
 }: Props) {
-  const [selectedTaskId,  setSelectedTaskId]  = useState<string | null>(null)
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [selectedTaskId,  setSelectedTaskId]  = useState<string | null>(focusedTaskId ?? null)
+  const [createColumnId, setCreateColumnId] = useState<string | null>(null)
 
   const selectedTask = Object.values(tasksByColumn).flat().find(t => t.id === selectedTaskId) ?? null
+  const createColumn = columns.find((column) => column.id === createColumnId) ?? null
 
   if (isLoading) {
     return (
@@ -42,25 +44,16 @@ export function TaskBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      {canOperate && columns.length > 0 && (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setShowCreateModal(true)}>
-            <Plus className="size-4 mr-1.5" />
-            Nueva tarea
-          </Button>
-        </div>
-      )}
-
       <CreateTaskModal
         accessToken={accessToken}
         projectId={projectId}
-        columns={columns}
+        column={createColumn}
         tasksByColumn={tasksByColumn}
         identity={identity}
         members={members}
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreated={() => { setShowCreateModal(false); onTaskSaved() }}
+        open={!!createColumn}
+        onClose={() => setCreateColumnId(null)}
+        onCreated={() => { setCreateColumnId(null); onTaskSaved() }}
         onError={onError}
       />
 
@@ -78,8 +71,8 @@ export function TaskBoard({
           <div
             className="grid gap-3"
             style={{
-              gridTemplateColumns: `repeat(${columns.length}, minmax(210px, 1fr))`,
-              minWidth: `calc(${columns.length} * (210px + 12px))`,
+              gridTemplateColumns: `repeat(${columns.length}, minmax(195px, 1fr))`,
+              minWidth: `calc(${columns.length} * (195px + 12px))`,
             }}
           >
             {columns.map((col) => (
@@ -89,8 +82,10 @@ export function TaskBoard({
                 tasks={tasksByColumn[col.id] ?? []}
                 selectedTaskId={selectedTaskId}
                 canDrag={canOperate}
+                canCreateTask={canOperate}
                 onSelectTask={(task) => setSelectedTaskId(task.id)}
                 onDropTask={(taskId) => onMoveTask(taskId, col.id)}
+                onCreateTask={() => setCreateColumnId(col.id)}
               />
             ))}
           </div>
@@ -104,6 +99,7 @@ export function TaskBoard({
         <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0" showCloseButton={false}>
           {selectedTask && (
             <TaskSheet
+              key={selectedTask.id}
               task={selectedTask}
               canEdit={canOperate}
               accessToken={accessToken}

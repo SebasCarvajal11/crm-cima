@@ -32,26 +32,28 @@ export function AdminUserActions({ row, patchStatus, patchFlags, softDelete, res
 
   if (row.deleted_at) {
     return (
-      <Button type="button" variant="secondary" size="sm" disabled={busy}
+      <div className="flex justify-end">
+      <Button type="button" variant="secondary" size="sm" className="h-8 w-[132px] justify-center px-3" disabled={busy}
         onClick={() => { clearActionMessage(); restore.mutate(row.id) }}>
         Restaurar
       </Button>
+      </div>
     )
   }
 
   return (
-    <div className="flex flex-wrap justify-end gap-1">
-      <Button type="button" variant="outline" size="sm" disabled={busy}
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3 sm:justify-items-end">
+      <Button type="button" variant="outline" size="sm" className="h-8 w-[132px] justify-center whitespace-nowrap px-3" disabled={busy}
         onClick={() => { clearActionMessage(); patchStatus.mutate({ subject: row.id, is_active: !row.is_active }) }}>
         {row.is_active ? 'Desactivar' : 'Activar'}
       </Button>
-      <Button type="button" variant="outline" size="sm" disabled={busy}
+      <Button type="button" variant="outline" size="sm" className="h-8 w-[132px] justify-center whitespace-nowrap px-3" disabled={busy}
         onClick={() => { clearActionMessage(); patchFlags.mutate({ subject: row.id, force_password_change: !row.force_password_change }) }}>
         {row.force_password_change ? 'Quitar fuerza pwd' : 'Forzar cambio pwd'}
       </Button>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button type="button" variant="destructive" size="sm" disabled={busy}>Archivar</Button>
+          <Button type="button" variant="destructive" size="sm" className="h-8 w-[132px] justify-center whitespace-nowrap px-3" disabled={busy}>Archivar</Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>

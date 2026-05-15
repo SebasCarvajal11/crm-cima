@@ -7,7 +7,23 @@ type RefreshPayload = {
   }
 }
 
-let refreshInFlight: Promise<string> | null = null
+type Subscriber = {
+  resolve: (token: string) => void
+  reject: (error: Error) => void
+}
+
+let isRefreshing = false
+let refreshSubscribers: Array<Subscriber> = []
+
+function onRefreshed(token: string) {
+  refreshSubscribers.forEach(({ resolve }) => resolve(token))
+  refreshSubscribers = []
+}
+
+function onRefreshFailed(error: Error) {
+  refreshSubscribers.forEach(({ reject }) => reject(error))
+  refreshSubscribers = []
+}
 
 function hasRetriedAuth(request: Request): boolean {
   return request.headers.get('x-auth-retried') === '1'
@@ -21,36 +37,40 @@ function shouldAttemptRefresh(request: Request, response: Response): boolean {
 }
 
 async function refreshAccessToken(): Promise<string> {
-  if (!refreshInFlight) {
-    refreshInFlight = (async () => {
-      const refreshResponse = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-
-      if (!refreshResponse.ok) {
-        throw new Error('No se pudo renovar la sesion')
-      }
-
-      const payload = (await refreshResponse.json()) as RefreshPayload
-      const token = payload.data?.access_token
-      if (!token) {
-        throw new Error('La respuesta de refresh no trae access_token')
-      }
-
-      useSessionStore.getState().setSession(token, useSessionStore.getState().email)
-      return token
-    })()
-      .catch((error) => {
-        useSessionStore.getState().clearSession()
-        throw error
-      })
-      .finally(() => {
-        refreshInFlight = null
-      })
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      refreshSubscribers.push({ resolve, reject })
+    })
   }
 
-  return refreshInFlight
+  isRefreshing = true
+
+  try {
+    const refreshResponse = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+
+    if (!refreshResponse.ok) {
+      throw new Error('No se pudo renovar la sesion')
+    }
+
+    const payload = (await refreshResponse.json()) as RefreshPayload
+    const token = payload.data?.access_token
+    if (!token) {
+      throw new Error('La respuesta de refresh no trae access_token')
+    }
+
+    useSessionStore.getState().setSession(token, useSessionStore.getState().email)
+    onRefreshed(token)
+    return token
+  } catch (error) {
+    useSessionStore.getState().clearSession()
+    onRefreshFailed(error as Error)
+    throw error
+  } finally {
+    isRefreshing = false
+  }
 }
 
 async function retryWithRefreshedToken(request: Request, token: string) {

@@ -1,124 +1,303 @@
+﻿import { CalendarClock, CheckCircle2, Download, Eye, File as FileIconBase, FileImage, FileText, FileVideo, GitPullRequestArrow, UserRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarClock, File, FileImage, FileText, FileVideo, Link2, Pencil, Trash2 } from 'lucide-react'
+import type { ProjectMember, ProjectTask, ProjectTimelineItem } from '@/collab/collab.types'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { deleteProjectFileRequest, updateProjectFileRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectFileEnriched, ProjectTask } from '@/collab/collab.types'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Props = {
   accessToken: string
   projectId: string
-  files: ProjectFileEnriched[]
+  timeline: ProjectTimelineItem[]
   tasks: ProjectTask[]
+  members?: ProjectMember[]
   canManage: boolean
   onError: (msg: string) => void
 }
 
-const fileIcon = (mimeType: string) => mimeType.startsWith('image/') ? FileImage : mimeType.startsWith('video/') ? FileVideo : mimeType.includes('pdf') || mimeType.startsWith('text/') ? FileText : File
-const formatDate = (iso: string) => new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
-const toDateInput = (d: string) => new Date(d).toISOString().slice(0, 10)
+const fileIcon = (mimeType: string) =>
+  mimeType.startsWith('image/')
+    ? FileImage
+    : mimeType.startsWith('video/')
+      ? FileVideo
+      : mimeType.includes('pdf') || mimeType.startsWith('text/')
+        ? FileText
+        : FileIconBase
 
-export function ConversationFilesTimeline({ accessToken, projectId, files, tasks, canManage, onError }: Props) {
-  const queryClient = useQueryClient()
-  const [channelFilter, setChannelFilter] = useState<'all' | 'internal' | 'external'>('all')
-  const [taskFilter, setTaskFilter] = useState('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editDesc, setEditDesc] = useState('')
-  const [editTaskId, setEditTaskId] = useState('')
+const itemIcon = (item: ProjectTimelineItem) => {
+  if (item.kind === 'task_completed') return CheckCircle2
+  if (item.kind === 'change_accepted') return GitPullRequestArrow
+  return fileIcon(item.mimeType ?? 'application/octet-stream')
+}
 
-  const remove = useMutation({
-    mutationFn: (fileId: string) => deleteProjectFileRequest(accessToken, fileId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...collabKeys.files(projectId), 'timeline'] }),
-    onError: (e) => onError(e instanceof Error ? e.message : 'No se pudo eliminar el archivo'),
-  })
-  const edit = useMutation({
-    mutationFn: (fileId: string) => updateProjectFileRequest(accessToken, fileId, { title: editTitle.trim(), description: editDesc.trim() || null, task_id: editTaskId || null }),
-    onSuccess: () => {
-      setEditingId(null)
-      void queryClient.invalidateQueries({ queryKey: [...collabKeys.files(projectId), 'timeline'] })
-    },
-    onError: (e) => onError(e instanceof Error ? e.message : 'No se pudo actualizar el archivo'),
+const supportsPreview = (mimeType: string) =>
+  mimeType.startsWith('image/') || mimeType.startsWith('video/') || mimeType === 'application/pdf' || mimeType.startsWith('text/')
+
+const formatBogotaDate = (iso: string) =>
+  new Date(iso).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    hour12: false,
   })
 
-  const filtered = useMemo(() => files.filter((f) => {
-    const originChannel = f.origin === 'internal_chat' ? 'internal' : 'external'
-    const created = toDateInput(f.createdAt)
-    return (channelFilter === 'all' || channelFilter === originChannel)
-      && (taskFilter === 'all' || f.taskId === taskFilter)
-      && (!fromDate || created >= fromDate)
-      && (!toDate || created <= toDate)
-  }), [files, channelFilter, taskFilter, fromDate, toDate])
+const badgeClassByKind: Record<ProjectTimelineItem['kind'], string> = {
+  file: 'bg-sky-100 text-sky-800 border-sky-200',
+  task_completed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  change_accepted: 'bg-amber-100 text-amber-800 border-amber-200',
+}
+
+export function ConversationFilesTimeline({ accessToken, timeline, tasks, members = [], onError }: Props) {
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [imageZoom, setImageZoom] = useState(1)
+  const [searchText, setSearchText] = useState('')
+  const [kindFilter, setKindFilter] = useState<'all' | ProjectTimelineItem['kind']>('all')
+  const [preview, setPreview] = useState<{ open: boolean; url: string | null; mime: string; fileName: string }>({
+    open: false,
+    url: null,
+    mime: '',
+    fileName: '',
+  })
+
+  const emailBySub = useMemo(
+    () => new Map(
+      members
+        .map((m) => [m.userSub, m.email] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+    ),
+    [members]
+  )
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task] as const)), [tasks])
+  const filteredTimeline = useMemo(() => {
+    const needle = searchText.trim().toLowerCase()
+    return timeline.filter((item) => {
+      if (kindFilter !== 'all' && item.kind !== kindFilter) return false
+      if (!needle) return true
+      const actorEmail = item.createdByEmail ?? (item.createdBySub ? emailBySub.get(item.createdBySub) : '') ?? ''
+      const haystack = `${item.title} ${item.fileName ?? ''} ${actorEmail}`.toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [timeline, kindFilter, searchText, emailBySub])
+
+  if (timeline.length === 0) {
+    return <p className="text-sm text-muted-foreground">No hay eventos registrados para este proyecto.</p>
+  }
+
+  const openPreview = async (fileId: string, fileName: string) => {
+    const key = `${fileId}:preview`
+    try {
+      setBusyKey(key)
+      const res = await fetch(`/api/files/${fileId}/download?preview=true`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!res.ok) throw new Error(`No se pudo previsualizar (${res.status})`)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      setImageZoom(1)
+      setPreview({
+        open: true,
+        url: objectUrl,
+        mime: blob.type || 'application/octet-stream',
+        fileName,
+      })
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'No se pudo previsualizar el archivo')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const closePreview = () => {
+    if (preview.url) URL.revokeObjectURL(preview.url)
+    setImageZoom(1)
+    setPreview({ open: false, url: null, mime: '', fileName: '' })
+  }
+
+  const openPreviewInNewTab = () => {
+    if (!preview.url) return
+    window.open(preview.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const downloadPreviewFile = () => {
+    if (!preview.url) return
+    const link = document.createElement('a')
+    link.href = preview.url
+    link.download = preview.fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const downloadFile = async (fileId: string, fileName: string) => {
+    const key = `${fileId}:download`
+    try {
+      setBusyKey(key)
+      const res = await fetch(`/api/files/${fileId}/download`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!res.ok) throw new Error(`No se pudo descargar (${res.status})`)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'No se pudo descargar el archivo')
+    } finally {
+      setBusyKey(null)
+    }
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={channelFilter} onChange={(e) => setChannelFilter(e.target.value as 'all' | 'internal' | 'external')}>
-          <option value="all">Todos los canales</option>
-          <option value="external">Canal cliente</option>
-          <option value="internal">Canal interno</option>
-        </select>
-        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)}>
-          <option value="all">Todas las tareas</option>
-          {tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-        </select>
-        <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-      </div>
-
-      <div className="space-y-4 max-h-[640px] overflow-y-auto pr-1">
-        {filtered.length === 0 && <p className="text-sm text-muted-foreground">No hay archivos para los filtros seleccionados.</p>}
-        {filtered.map((item) => {
-          const Icon = fileIcon(item.mimeType)
+    <>
+      <div className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px]">
+          <Input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Buscar por nombre o usuario"
+            aria-label="Buscar en trazabilidad"
+            className="h-8 text-xs"
+          />
+          <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as 'all' | ProjectTimelineItem['kind'])}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="file">Archivo</SelectItem>
+              <SelectItem value="change_accepted">Cambio aceptado</SelectItem>
+              <SelectItem value="task_completed">Tarea finalizada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {filteredTimeline.length === 0 && (
+          <p className="text-sm text-muted-foreground">No hay eventos que coincidan con la búsqueda o el filtro.</p>
+        )}
+        {filteredTimeline.map((item, index) => {
+          const Icon = itemIcon(item)
+          const isFile = item.kind === 'file' && !!item.fileId && !!item.fileName && !!item.mimeType
+          const previewable = isFile ? supportsPreview(item.mimeType!) : false
+          const linkedTask = item.taskId ? taskById.get(item.taskId) : null
+          const actorEmail = item.createdByEmail ?? (item.createdBySub ? emailBySub.get(item.createdBySub) : null)
+          const isLast = index === filteredTimeline.length - 1
           return (
-            <article key={item.id} className="relative pl-8 pb-6">
-              <span className="absolute left-[9px] top-7 bottom-0 w-px bg-border" aria-hidden="true" />
-              <span className="absolute left-0 top-1 inline-flex size-5 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="size-3" /></span>
-              <div className="rounded-lg border bg-background p-3 space-y-2">
-                {editingId === item.id ? (
-                  <div className="space-y-2">
-                    <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-                    <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Descripcion" />
-                    <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={editTaskId} onChange={(e) => setEditTaskId(e.target.value)}>
-                      <option value="">Sin tarea asociada</option>
-                      {tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-                    </select>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => edit.mutate(item.id)} disabled={edit.isPending}>Guardar</Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancelar</Button>
+            <article key={`${item.kind}:${item.id}`} className="relative pl-9">
+              {!isLast && <span className="absolute left-[13px] top-8 bottom-[-0.85rem] w-px bg-border" aria-hidden="true" />}
+              <span className="absolute left-0 top-1 inline-flex size-7 items-center justify-center rounded-full border bg-muted/40 text-primary shadow-sm">
+                <Icon className="size-3.5" />
+              </span>
+              <div className="rounded-md border bg-background px-3 py-2.5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5">
+                      <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none ${badgeClassByKind[item.kind]}`}>
+                        {item.label}
+                      </span>
+                    </div>
+                    <p className="line-clamp-2 text-[13px] font-semibold leading-snug">{item.title}</p>
+                    {isFile && <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{item.fileName}</p>}
+                    {item.kind === 'task_completed' && linkedTask && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">Progreso final: {linkedTask.checklistProgress}%</p>
+                    )}
+                    <div className="mt-2.5 grid gap-1 text-[10px] text-muted-foreground">
+                      <p className="inline-flex items-center gap-1.5 leading-none">
+                        <CalendarClock className="size-3" />
+                        {formatBogotaDate(item.occurredAt)}
+                      </p>
+                      {actorEmail && (
+                        <p className="inline-flex items-center gap-1.5 leading-none">
+                          <UserRound className="size-3" />
+                          {actorEmail}
+                        </p>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold">{item.title ?? item.fileName}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.fileName}</p>
-                    <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1"><CalendarClock className="size-3.5" />{formatDate(item.createdAt)}</span>
-                      <span className="inline-flex items-center gap-1"><FileText className="size-3.5" />{item.createdByEmail ?? 'Usuario'}</span>
-                      <span className="inline-flex items-center gap-1"><Link2 className="size-3.5" />{item.taskTitle ?? 'Sin tarea ligada'}</span>
-                    </div>
-                    {canManage && (
-                      <div className="flex gap-2 pt-1">
-                        <Button size="sm" variant="outline" onClick={() => { setEditingId(item.id); setEditTitle(item.title ?? item.fileName); setEditDesc(item.description ?? ''); setEditTaskId(item.taskId ?? '') }} className="gap-1">
-                          <Pencil className="size-3.5" />Editar
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => remove.mutate(item.id)} disabled={remove.isPending} className="gap-1">
-                          <Trash2 className="size-3.5" />Eliminar
+                  {isFile && item.fileId && item.fileName && item.mimeType && (
+                    <div className="flex shrink-0 items-center self-center">
+                      <div className="flex min-w-[122px] flex-col items-stretch gap-1.5">
+                        {previewable && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 w-full justify-center px-2 text-[10px]"
+                            disabled={busyKey !== null}
+                            onClick={() => void openPreview(item.fileId!, item.fileName!)}
+                          >
+                            <Eye className="mr-1 size-3" />
+                            {busyKey === `${item.fileId}:preview` ? 'Abriendo...' : 'Previsualizar'}
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 w-full justify-center px-2 text-[10px]"
+                          disabled={busyKey !== null}
+                          onClick={() => void downloadFile(item.fileId!, item.fileName!)}
+                        >
+                          <Download className="mr-1 size-3" />
+                          {busyKey === `${item.fileId}:download` ? 'Descargando...' : 'Descargar'}
                         </Button>
                       </div>
-                    )}
-                  </>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             </article>
           )
         })}
       </div>
-    </div>
+
+      <Dialog open={preview.open} onOpenChange={(open) => { if (!open) closePreview() }}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">{preview.fileName}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {preview.mime.startsWith('image/') && (
+                <>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setImageZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))}>-</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setImageZoom(1)}>{Math.round(imageZoom * 100)}%</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setImageZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))}>+</Button>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={openPreviewInNewTab}>Abrir en pestaña</Button>
+              <Button type="button" size="sm" onClick={downloadPreviewFile}>
+                <Download className="mr-1 size-3.5" />
+                Descargar
+              </Button>
+            </div>
+          </div>
+          <div className="max-h-[75vh] overflow-auto rounded-md border bg-muted/20 p-2">
+            {preview.url && preview.mime.startsWith('image/') && (
+              <img
+                src={preview.url}
+                alt={preview.fileName}
+                className="mx-auto h-auto max-h-[70vh] w-auto rounded"
+                style={{ transform: `scale(${imageZoom})`, transformOrigin: 'top center' }}
+              />
+            )}
+            {preview.url && preview.mime === 'application/pdf' && (
+              <iframe src={preview.url} title={preview.fileName} className="h-[70vh] w-full rounded border-0" />
+            )}
+            {preview.url && preview.mime.startsWith('video/') && (
+              <video src={preview.url} controls className="mx-auto max-h-[70vh] w-auto max-w-full rounded" />
+            )}
+            {preview.url && preview.mime.startsWith('text/') && (
+              <iframe src={preview.url} title={preview.fileName} className="h-[70vh] w-full rounded border-0" />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
-

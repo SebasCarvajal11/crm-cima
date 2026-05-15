@@ -27,6 +27,16 @@ export type ProjectListItem = {
   unreadNotifications: number
 }
 
+export type ProjectSearchResult = {
+  id: string
+  name: string
+  clientName: string
+  clientEmail: string | null
+  type: ProjectType
+  status: ParentProjectStatus
+  progressPercent: number
+}
+
 /** Proyecto completo (devuelto por workspace y endpoints individuales). */
 export type Project = ProjectListItem & {
   description: string | null
@@ -83,6 +93,7 @@ export type ProjectTask = {
   isClientVisible: boolean
   position: number
   subtasks: { id: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[] | null
+  completedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -177,6 +188,22 @@ export type ProjectFileEnriched = ProjectFile & {
   currentColumnTitle: string | null
 }
 
+export type ProjectTimelineItem = {
+  id: string
+  kind: 'file' | 'task_completed' | 'change_accepted'
+  label: 'Archivo' | 'Tarea finalizada' | 'Cambio aceptado'
+  title: string
+  occurredAt: string
+  fileId: string | null
+  fileName: string | null
+  mimeType: string | null
+  taskId: string | null
+  changeRequestId: string | null
+  createdBySub: string | null
+  createdByEmail: string | null
+  isClientVisible: boolean
+}
+
 export type ProjectTaskAssignee = {
   taskId: string
   userSub: string
@@ -214,6 +241,15 @@ export type ProjectChangeRequest = {
 export type DataResponse<T> = {
   data: T
 }
+
+export type PaginatedData<T> = {
+  items: T[]
+  page: number
+  limit: number
+  total: number
+  total_pages: number
+}
+
 
 export type ChatMentionNotification = {
   id: string

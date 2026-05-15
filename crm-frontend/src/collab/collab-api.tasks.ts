@@ -84,22 +84,37 @@ export async function uploadTaskFileRequest(
   accessToken: string,
   projectId: string,
   taskId: string,
-  file: File,
   title: string,
   description: string,
-  isClientVisible: boolean
+  body: {
+    fileName: string
+    storagePath: string
+    mimeType: string
+    sizeBytes: number
+    isClientVisible: boolean
+  }
 ): Promise<DataResponse<ProjectFile>> {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('title', title)
-  form.append('description', description)
-  form.append('is_client_visible', String(isClientVisible))
   return api
-    .post(`projects/${projectId}/tasks/${taskId}/files`, { headers: bearer(accessToken), body: form })
+    .post(`projects/${projectId}/tasks/${taskId}/files/metadata`, {
+      headers: bearer(accessToken),
+      json: {
+        title,
+        description,
+        file_name: body.fileName,
+        storage_path: body.storagePath,
+        mime_type: body.mimeType,
+        size_bytes: body.sizeBytes,
+        is_client_visible: body.isClientVisible,
+      },
+    })
     .json<DataResponse<ProjectFile>>()
 }
 
-/** Devuelve la URL de descarga proxiada por Vite para abrir/descargar el archivo. */
-export function getFileDownloadUrl(_accessToken: string, fileId: string): string {
-  return `/api/files/${fileId}/download`
+export async function getFileAccessRequest(
+  accessToken: string,
+  fileId: string,
+  preview = false
+): Promise<DataResponse<{ url: string; expiresInSeconds: number }>> {
+  const searchParams = preview ? { preview: 'true' } : undefined
+  return api.get(`files/${fileId}/access`, { headers: bearer(accessToken), searchParams }).json()
 }

@@ -9,6 +9,7 @@ import type {
   AdminUsersListResponse,
   ForgotPasswordResponse,
   InviteClientResponse,
+  InviteAdminResponse,
   InvitePreviewResponse,
   LoginResponse,
   MeResponse,
@@ -182,11 +183,29 @@ export async function inviteClientRequest(
     .json<InviteClientResponse>()
 }
 
+export async function inviteAdminRequest(
+  accessToken: string,
+  body: {
+    email: string
+    first_name: string
+    last_name: string
+    secret_password: string
+  }
+): Promise<InviteAdminResponse> {
+  return api
+    .post('admin/admins/invite', {
+      headers: bearer(accessToken),
+      json: body,
+    })
+    .json<InviteAdminResponse>()
+}
+
 export type AdminListUsersParams = {
   page?: number
   limit?: number
   role?: UserRole
   include_deleted?: boolean
+  q?: string
 }
 
 export async function adminListUsersRequest(
@@ -198,6 +217,7 @@ export async function adminListUsersRequest(
   if (params.limit != null) searchParams.limit = String(params.limit)
   if (params.role) searchParams.role = params.role
   if (params.include_deleted === true) searchParams.include_deleted = 'true'
+  if (params.q?.trim()) searchParams.q = params.q.trim()
 
   return api
     .get('admin/users', {

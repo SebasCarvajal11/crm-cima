@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, FolderOpen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { getFileDownloadUrl, listProjectFilesEnrichedRequest } from '@/collab/collab-api'
+import { listProjectFilesEnrichedRequest } from '@/collab/collab-api'
 import { collabKeys } from '@/collab/query-keys'
 import type { ProjectFileEnriched } from '@/collab/collab.types'
 
@@ -18,11 +19,12 @@ type Props = {
 
 /** Organismo: tabla de archivos del proyecto con informacion enriquecida de tarea y fase. */
 export function ProjectFiles({ accessToken, projectId }: Props) {
+  const [busyId, setBusyId] = useState<string | null>(null)
   const filesQ = useQuery({
     queryKey: collabKeys.files(projectId),
     queryFn:  () => listProjectFilesEnrichedRequest(accessToken, projectId),
   })
-  const files = (filesQ.data?.data ?? []) as ProjectFileEnriched[]
+  const files = (filesQ.data?.data.items ?? []) as ProjectFileEnriched[]
 
   if (filesQ.isLoading) {
     return (
@@ -40,6 +42,29 @@ export function ProjectFiles({ accessToken, projectId }: Props) {
         <p className="text-sm text-center max-w-xs">Los archivos adjuntos a tareas apareceran aqui.</p>
       </div>
     )
+  }
+
+  const openDownload = async (fileId: string, fileName: string) => {
+    try {
+      setBusyId(fileId)
+      const res = await fetch(`/api/files/${fileId}/download`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!res.ok) throw new Error(`No se pudo descargar (${res.status})`)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
@@ -86,15 +111,15 @@ export function ProjectFiles({ accessToken, projectId }: Props) {
                 </span>
               </td>
               <td className="px-4 py-3">
-                <a
-                  href={getFileDownloadUrl(accessToken, f.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   className="p-1.5 rounded hover:bg-muted transition-colors inline-flex"
                   aria-label={`Descargar ${f.fileName}`}
+                  disabled={busyId !== null}
+                  onClick={() => void openDownload(f.id, f.fileName)}
                 >
                   <Download className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                </a>
+                </button>
               </td>
             </tr>
           ))}

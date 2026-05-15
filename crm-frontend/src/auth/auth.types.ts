@@ -55,9 +55,6 @@ export type MessageResponse = {
 
 export type ForgotPasswordResponse = {
   message: string
-  data?: {
-    token?: string
-  }
 }
 
 export type InvitePreviewResponse = {
@@ -92,15 +89,15 @@ export type RegisterWorkerResponse = {
       profession: string | null
       force_password_change?: boolean
     }
-    temp_password?: string
   }
+}
+
+export type InviteAdminResponse = RegisterWorkerResponse & {
+  message: string
 }
 
 export type InviteClientResponse = {
   message: string
-  data: {
-    token?: string
-  }
 }
 
 export type AdminUserRow = {

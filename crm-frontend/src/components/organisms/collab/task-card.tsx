@@ -1,6 +1,6 @@
-import { Calendar, Clock, GripVertical, User, CheckSquare } from 'lucide-react'
+﻿import { Calendar, Clock, GripVertical, User, CheckSquare } from 'lucide-react'
 import { PriorityBadge } from '@/components/molecules/priority-badge'
-import type { ProjectTask } from '@/collab/collab.types'
+import type { ProjectTask } from '@/features/collab/model'
 
 type Props = {
   task: ProjectTask
@@ -97,3 +97,4 @@ export function TaskCard({ task, isSelected, canDrag, onClick }: Props) {
     </button>
   )
 }
+

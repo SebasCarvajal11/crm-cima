@@ -13,11 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { UserChip } from '@/components/molecules/user-chip'
 import { UserSearch } from '@/components/molecules/user-search'
-import { parseApiError } from '@/auth/parse-api-error'
-import type { ClientSearchResult } from '@/auth/auth-api'
-import { createProjectRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectType } from '@/collab/collab.types'
+import { parseApiError } from '@/shared/lib'
+import type { ClientSearchResult } from '@/shared/types'
+import { createProjectRequest } from '@/features/collab/api'
+import { collabKeys } from '@/features/collab/model'
+import type { ProjectType } from '@/features/collab/model'
 
 type Props = {
   accessToken: string
@@ -174,3 +174,6 @@ export function CreateProjectModal({ accessToken, open, onClose, onCreated }: Pr
     </Dialog>
   )
 }
+
+
+

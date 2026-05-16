@@ -1,42 +1,17 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FormField } from '@/components/molecules/form-field'
-import { inviteAdminRequest, inviteClientRequest, registerWorkerRequest } from '@/auth/auth-api'
-import { adminUsersKeys } from '@/auth/query-keys'
-import { parseApiError } from '@/auth/parse-api-error'
-
-const inviteClientSchema = z.object({
-  email: z.string().email(),
-  first_name: z.string().trim().min(1, 'Requerido').max(120),
-  last_name: z.string().trim().min(1, 'Requerido').max(120),
-  client_kind: z.enum(['natural', 'juridical']),
-  company_name: z.string().trim().max(160).optional(),
-}).superRefine((value, ctx) => {
-  if (value.client_kind === 'juridical' && !value.company_name) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['company_name'], message: 'Requerido para cliente juridico' })
-  }
-})
-
-const registerWorkerSchema = z.object({
-  email: z.string().email(),
-  first_name: z.string().trim().min(1, 'Requerido').max(120),
-  last_name: z.string().trim().min(1, 'Requerido').max(120),
-  profession: z.string().trim().min(1, 'Requerido').max(160),
-})
-
-const inviteAdminSchema = z.object({
-  email: z.string().email(),
-  first_name: z.string().trim().min(1, 'Requerido').max(120),
-  last_name: z.string().trim().min(1, 'Requerido').max(120),
-  secret_password: z.string().min(1, 'Requerido'),
-})
+import {
+  inviteAdminSchema,
+  inviteClientSchema,
+  registerWorkerSchema,
+  useAdminInvites,
+} from '@/features/admin/hooks'
 
 type Props = {
   accessToken: string
@@ -48,60 +23,23 @@ const inputClass = 'h-10'
 const pairClass = 'grid grid-cols-1 gap-3 sm:grid-cols-2'
 
 export function AdminInviteForms({ accessToken }: Props) {
-  const queryClient = useQueryClient()
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: adminUsersKeys.all })
-
-  const inviteForm = useForm<z.infer<typeof inviteClientSchema>>({
+  const inviteForm = useForm<import('zod').infer<typeof inviteClientSchema>>({
     resolver: zodResolver(inviteClientSchema),
     defaultValues: { email: '', first_name: '', last_name: '', client_kind: 'natural', company_name: '' },
   })
-  const inviteKind = inviteForm.watch('client_kind')
+  const inviteKind = useWatch({ control: inviteForm.control, name: 'client_kind' })
 
-  const inviteMutation = useMutation({
-    mutationFn: async (payload: z.infer<typeof inviteClientSchema>) => {
-      try {
-        return await inviteClientRequest(accessToken, {
-          ...payload,
-          company_name: payload.client_kind === 'juridical' ? payload.company_name : undefined,
-        })
-      } catch (error) {
-        throw new Error(await parseApiError(error), { cause: error })
-      }
-    },
-    onSuccess: () => { inviteForm.reset(); invalidate() },
-  })
-
-  const workerForm = useForm<z.infer<typeof registerWorkerSchema>>({
+  const workerForm = useForm<import('zod').infer<typeof registerWorkerSchema>>({
     resolver: zodResolver(registerWorkerSchema),
     defaultValues: { email: '', first_name: '', last_name: '', profession: '' },
   })
 
-  const workerMutation = useMutation({
-    mutationFn: async (payload: z.infer<typeof registerWorkerSchema>) => {
-      try {
-        return await registerWorkerRequest(accessToken, payload)
-      } catch (error) {
-        throw new Error(await parseApiError(error), { cause: error })
-      }
-    },
-    onSuccess: () => { workerForm.reset(); invalidate() },
-  })
-
-  const adminForm = useForm<z.infer<typeof inviteAdminSchema>>({
+  const adminForm = useForm<import('zod').infer<typeof inviteAdminSchema>>({
     resolver: zodResolver(inviteAdminSchema),
     defaultValues: { email: '', first_name: '', last_name: '', secret_password: '' },
   })
 
-  const adminMutation = useMutation({
-    mutationFn: async (payload: z.infer<typeof inviteAdminSchema>) => {
-      try {
-        return await inviteAdminRequest(accessToken, payload)
-      } catch (error) {
-        throw new Error(await parseApiError(error), { cause: error })
-      }
-    },
-    onSuccess: () => { adminForm.reset(); invalidate() },
-  })
+  const { adminMutation, inviteMutation, workerMutation } = useAdminInvites(accessToken)
 
   return (
     <section className="grid gap-6 xl:grid-cols-3">
@@ -111,7 +49,7 @@ export function AdminInviteForms({ accessToken }: Props) {
           <CardDescription>Envia una invitacion por correo con datos del cliente.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={inviteForm.handleSubmit((values) => inviteMutation.mutate(values))}>
+          <form className="space-y-4" onSubmit={inviteForm.handleSubmit((values) => inviteMutation.mutate(values, { onSuccess: () => inviteForm.reset() }))}>
             <FormField id="invite-email" label="Correo" error={inviteForm.formState.errors.email?.message}>
               <Input type="email" autoComplete="email" className={inputClass} {...inviteForm.register('email')} />
             </FormField>
@@ -167,7 +105,7 @@ export function AdminInviteForms({ accessToken }: Props) {
           <CardDescription>Crea la cuenta y envia por correo la contrasena temporal.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={workerForm.handleSubmit((values) => workerMutation.mutate(values))}>
+          <form className="space-y-4" onSubmit={workerForm.handleSubmit((values) => workerMutation.mutate(values, { onSuccess: () => workerForm.reset() }))}>
             <FormField id="worker-email" label="Correo" error={workerForm.formState.errors.email?.message}>
               <Input type="email" autoComplete="email" className={inputClass} {...workerForm.register('email')} />
             </FormField>
@@ -209,7 +147,7 @@ export function AdminInviteForms({ accessToken }: Props) {
           <CardDescription>Requiere la contrasena secreta del gerente para autorizar esta accion.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={adminForm.handleSubmit((values) => adminMutation.mutate(values))}>
+          <form className="space-y-4" onSubmit={adminForm.handleSubmit((values) => adminMutation.mutate(values, { onSuccess: () => adminForm.reset() }))}>
             <FormField id="admin-email" label="Correo" error={adminForm.formState.errors.email?.message}>
               <Input type="email" autoComplete="email" className={inputClass} {...adminForm.register('email')} />
             </FormField>

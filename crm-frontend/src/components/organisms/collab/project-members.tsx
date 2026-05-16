@@ -1,17 +1,12 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Briefcase, CheckSquare2, Clock3, Crown, Mail, Plus, User, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UserSearch } from '@/components/molecules/user-search'
 import { UserChip } from '@/components/molecules/user-chip'
-import { parseApiError } from '@/auth/parse-api-error'
-import { listProjectMembersRequest, upsertProjectMemberRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectMember, ProjectMemberRole } from '@/collab/collab.types'
-import type { ClientSearchResult } from '@/auth/auth-api'
-import type { MeResponse } from '@/auth/auth.types'
-import { getCurrentAvatarRequest, getUserAvatarsRequest } from '@/media/media-api'
-import { pickAvatarUrl } from '@/media/avatar-utils'
+import { useProjectMembers } from '@/features/collab/hooks'
+import type { ProjectMember, ProjectMemberRole } from '@/features/collab/model'
+import type { ClientSearchResult } from '@/shared/types'
+import type { MeResponse } from '@/shared/types'
 
 type Props = {
   members: ProjectMember[]
@@ -96,51 +91,15 @@ function getRelativeActivityLabel(iso: string | null) {
 }
 
 export function ProjectMembers({ members, isLoading, accessToken, projectId, identity, canManageMembers, onError }: Props) {
-  const queryClient = useQueryClient()
   const [selectedWorkers, setSelectedWorkers] = useState<ClientSearchResult[]>([])
-
-  const membersQ = useQuery({
-    queryKey: collabKeys.projectMembers(projectId),
-    queryFn: () => listProjectMembersRequest(accessToken, projectId),
-    initialData: members.length > 0 ? { data: members } : undefined,
-    staleTime: 20_000,
-  })
-
-  const resolvedMembers = membersQ.data?.data ?? members
-  const avatarSubjects = Array.from(new Set(resolvedMembers.map((m) => m.userSub)))
-  const avatarsQ = useQuery({
-    queryKey: ['media', 'avatars', 'users', projectId, avatarSubjects.join(',')],
-    queryFn: () => getUserAvatarsRequest(accessToken, avatarSubjects),
-    enabled: avatarSubjects.length > 0,
-    staleTime: 60_000,
-  })
-  const avatarBySub = avatarsQ.data?.data.items ?? {}
-  const currentAvatarQ = useQuery({
-    queryKey: ['media', 'avatar', 'current', accessToken],
-    queryFn: () => getCurrentAvatarRequest(accessToken),
-    enabled: Boolean(accessToken),
-    retry: false,
-    staleTime: 60_000,
-  })
-  const currentUserAvatarUrl = pickAvatarUrl(currentAvatarQ.data?.data.urls, '64')
-
-  const addWorker = useMutation({
-    mutationFn: async () => {
-      for (const worker of selectedWorkers) {
-        await upsertProjectMemberRequest(accessToken, projectId, {
-          user_sub: worker.subject,
-          user_email: worker.email,
-          role: 'worker',
-        })
-      }
-    },
-    onSuccess: () => {
-      setSelectedWorkers([])
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projectMembers(projectId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
-    },
-    onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo agregar trabajador al proyecto')),
+  const { membersQ, resolvedMembers, addWorker, memberAvatarUrl } = useProjectMembers({
+    accessToken,
+    projectId,
+    members,
+    selectedWorkers,
+    setSelectedWorkers: (updater) => setSelectedWorkers((prev) => updater(prev)),
+    identityEmail: identity.email,
+    onError,
   })
 
   if (isLoading || membersQ.isLoading) {
@@ -229,14 +188,13 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, ide
               {group.map((member) => {
                 const displayName = getDisplayName(member)
                 const showEmailLine = Boolean(member.email && member.email !== displayName)
-                const fallbackToCurrentUserAvatar = member.email === identity.email ? currentUserAvatarUrl : null
-                const memberAvatarUrl = pickAvatarUrl(avatarBySub[member.userSub]?.urls, '64') ?? fallbackToCurrentUserAvatar
+                const avatarUrl = memberAvatarUrl(member.userSub, member.email)
                 return (
                   <article key={member.userSub} className={`rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-shadow hover:shadow-md ${cfg.cardClass}`}>
                     <div className="flex items-start gap-3">
                       <div className={`${getAvatarColor(member.userSub)} flex size-10 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white`}>
-                        {memberAvatarUrl ? (
-                          <img src={memberAvatarUrl} alt={`Avatar de ${displayName}`} className="size-10 object-cover" />
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt={`Avatar de ${displayName}`} className="size-10 object-cover" />
                         ) : (
                           getInitials(member)
                         )}
@@ -285,3 +243,6 @@ export function ProjectMembers({ members, isLoading, accessToken, projectId, ide
     </div>
   )
 }
+
+
+

@@ -1,5 +1,5 @@
-import React from "react"
-import { cn } from "@/lib/utils"
+﻿import React from "react"
+import { cn } from "@/shared/lib/utils"
 
 interface GridPatternProps {
   width?: number
@@ -60,3 +60,4 @@ export function GridPattern({
 export type { GridPatternProps }
 
 export default GridPattern
+

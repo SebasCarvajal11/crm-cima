@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Calendar, FileText, Lock, Paperclip, Pencil, MessageSquare, User, X, CheckSquare, Trash2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,14 +8,13 @@ import { Separator } from '@/components/ui/separator'
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { UserChip } from '@/components/molecules/user-chip'
-import { PriorityBadge, PRIORITY_CONFIG } from '@/components/molecules/priority-badge'
-import { parseApiError } from '@/auth/parse-api-error'
-import { patchTaskRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+import { PriorityBadge } from '@/components/molecules/priority-badge'
+import { PRIORITY_CONFIG } from '@/components/molecules/priority-config'
+import { useTaskSheetSave } from '@/features/collab/hooks'
 import { TaskComments } from './task-comments'
 import { TaskFilesTab } from './task-files-tab'
-import type { ClientSearchResult } from '@/auth/auth-api'
-import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/collab/collab.types'
+import type { ClientSearchResult } from '@/shared/types'
+import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/features/collab/model'
 
 type Tab = 'info' | 'comments' | 'files'
 
@@ -46,34 +44,18 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
 
   const [newSubtask,         setNewSubtask]         = useState('')
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('none')
-  const queryClient = useQueryClient()
 
   const assignableMembers = members.filter((m) => m.role === 'worker' && Boolean(m.email))
 
-  const save = useMutation({
-    mutationFn: (subtasks?: { id: string; title: string; is_completed: boolean; assignee_sub: string | null }[]) =>
-      patchTaskRequest(accessToken, task.id, {
-        title:          editTitle.trim(),
-        description:    editDesc.trim() || null,
-        priority:       editPriority,
-        client_visible: editVisible,
-        column_id:      editColumnId !== task.columnId ? editColumnId : undefined,
-        due_date:       editDeadline || null,
-        assignees:      editWorkers.length > 0
-          ? editWorkers.map(w => ({ user_sub: w.subject, user_email: w.email }))
-          : undefined,
-        subtasks,
-      }),
-    onSuccess: (_, variables) => {
+  const { save } = useTaskSheetSave({
+    accessToken,
+    projectId,
+    task,
+    onSaved: () => {
       setEditing(false)
-      if (variables === undefined) {
-        onSaved()
-      } else {
-        void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
-        void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
-      }
+      onSaved()
     },
-    onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo guardar')),
+    onError,
   })
 
   // â”€â”€ Subtask handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -92,7 +74,16 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
       is_completed: false,
       assignee_sub: newSubtaskAssignee,
     }]
-    save.mutate(updated)
+    save.mutate({
+      editTitle,
+      editDesc,
+      editPriority,
+      editVisible,
+      editDeadline,
+      editColumnId,
+      editWorkers,
+      subtasks: updated,
+    })
     setNewSubtask('')
     setNewSubtaskAssignee('none')
   }
@@ -105,7 +96,16 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
       is_completed: s.id === id ? isCompleted : s.isCompleted,
       assignee_sub: s.assigneeSub ?? null,
     }))
-    save.mutate(updated)
+    save.mutate({
+      editTitle,
+      editDesc,
+      editPriority,
+      editVisible,
+      editDeadline,
+      editColumnId,
+      editWorkers,
+      subtasks: updated,
+    })
   }
 
   const handleDeleteSubtask = (id: string) => {
@@ -113,7 +113,16 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
     const updated = task.subtasks
       .filter(s => s.id !== id)
       .map(s => ({ id: s.id, title: s.title, is_completed: s.isCompleted, assignee_sub: s.assigneeSub ?? null }))
-    save.mutate(updated)
+    save.mutate({
+      editTitle,
+      editDesc,
+      editPriority,
+      editVisible,
+      editDeadline,
+      editColumnId,
+      editWorkers,
+      subtasks: updated,
+    })
   }
 
   const getMemberLabel = (sub: string | null | undefined) => {
@@ -450,7 +459,15 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
               <Separator />
               <div className="flex gap-2">
                 <Button className="flex-1" disabled={editTitle.trim().length < 2 || save.isPending}
-                  onClick={() => save.mutate(undefined)}>
+                  onClick={() => save.mutate({
+                    editTitle,
+                    editDesc,
+                    editPriority,
+                    editVisible,
+                    editDeadline,
+                    editColumnId,
+                    editWorkers,
+                  })}>
                   {save.isPending ? 'Guardando…' : 'Guardar cambios'}
                 </Button>
                 <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
@@ -468,5 +485,9 @@ export function TaskSheet({ task, canEdit, accessToken, projectId, members, colu
     </>
   )
 }
+
+
+
+
 
 

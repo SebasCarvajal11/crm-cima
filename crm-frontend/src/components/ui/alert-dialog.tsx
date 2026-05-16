@@ -1,9 +1,9 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import { Button } from "@/components/ui/button"
 
 function AlertDialog({
@@ -197,3 +197,4 @@ export {
   AlertDialogTitle,
   AlertDialogTrigger,
 }
+

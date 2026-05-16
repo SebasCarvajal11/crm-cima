@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,10 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { createProjectFileMetadataRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import { uploadDocumentRequest } from '@/media/media-api'
-import { isBlockedByExtension, SAFE_FILE_ACCEPT } from '@/media/file-security'
+import { createProjectFileMetadataRequest } from '@/features/collab/api'
+import { collabKeys } from '@/features/collab/model'
+import { uploadDocumentRequest } from '@/features/media/api'
+import { isBlockedByExtension, SAFE_FILE_ACCEPT } from '@/features/media/utils'
 
 type Props = {
   accessToken: string
@@ -91,3 +91,4 @@ export function ConversationUploadForm({ accessToken, projectId, onError }: Prop
     </div>
   )
 }
+

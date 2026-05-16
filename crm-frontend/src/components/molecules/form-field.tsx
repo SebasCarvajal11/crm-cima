@@ -1,6 +1,6 @@
-import * as React from 'react'
+﻿import * as React from 'react'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 type FormFieldProps = {
   id: string
@@ -12,7 +12,7 @@ type FormFieldProps = {
   className?: string
 }
 
-/** Molécula: etiqueta + control + error (el control repite `id` para accesibilidad). */
+/** MolÃ©cula: etiqueta + control + error (el control repite `id` para accesibilidad). */
 export function FormField({ id, label, error, hint, children, className }: FormFieldProps) {
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
@@ -50,3 +50,4 @@ export function FormField({ id, label, error, hint, children, className }: FormF
     </div>
   )
 }
+

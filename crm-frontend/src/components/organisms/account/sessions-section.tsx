@@ -1,5 +1,3 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -18,16 +16,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SectionIntro } from '@/components/molecules/section-intro'
-import { listSessionsRequest, revokeSessionRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
-import { authKeys } from '@/auth/query-keys'
+import { useSessionsSection } from '@/features/auth/hooks'
 
 type Props = {
   accessToken: string
 }
-
-const PAGE_SIZE = 2
-const PAGE_BLOCK_SIZE = 5
 
 function formatDateTime(value: string) {
   const date = new Date(value)
@@ -37,55 +30,17 @@ function formatDateTime(value: string) {
 
 /** Organismo: listado y revocacion de sesiones activas del usuario. */
 export function SessionsSection({ accessToken }: Props) {
-  const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
-
-  const sessionsQ = useQuery({
-    queryKey: [...authKeys.sessions(), accessToken],
-    queryFn: () => listSessionsRequest(accessToken),
-    enabled: Boolean(accessToken),
-  })
-
-  const sessions = useMemo(() => sessionsQ.data?.data.sessions ?? [], [sessionsQ.data])
-
-  const revokeMutation = useMutation({
-    mutationFn: async (familyId: string) => {
-      try {
-        return await revokeSessionRequest(accessToken, familyId)
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: authKeys.sessions() }),
-  })
-
-  const revokeAllMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        const allFamilies = sessions.map((session) => session.family)
-        await Promise.all(allFamilies.map((familyId) => revokeSessionRequest(accessToken, familyId)))
-      } catch (error) {
-        throw new Error(await parseApiError(error), { cause: error })
-      }
-    },
-    onSuccess: () => {
-      queryClient.clear()
-      window.location.replace('/login')
-    },
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE))
-  const pageSafe = Math.min(Math.max(1, page), totalPages)
-  const pageStart = (pageSafe - 1) * PAGE_SIZE
-  const pageSessions = sessions.slice(pageStart, pageStart + PAGE_SIZE)
-  const pageWindow = useMemo(() => {
-    const blockIndex = Math.floor((pageSafe - 1) / PAGE_BLOCK_SIZE)
-    const start = blockIndex * PAGE_BLOCK_SIZE + 1
-    const end = Math.min(start + PAGE_BLOCK_SIZE - 1, totalPages)
-    const pages: number[] = []
-    for (let p = start; p <= end; p += 1) pages.push(p)
-    return pages
-  }, [pageSafe, totalPages])
+  const {
+    pageSafe,
+    pageSessions,
+    pageWindow,
+    revokeAllMutation,
+    revokeMutation,
+    sessions,
+    sessionsQ,
+    setPage,
+    totalPages,
+  } = useSessionsSection(accessToken)
 
   return (
     <section className="space-y-4">

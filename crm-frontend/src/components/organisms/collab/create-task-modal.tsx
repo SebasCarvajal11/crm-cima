@@ -1,5 +1,4 @@
-﻿import { useEffect, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { CheckSquare, Lock, Plus, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,11 +14,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { UserChip } from '@/components/molecules/user-chip'
-import { parseApiError } from '@/auth/parse-api-error'
-import { createTaskRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/collab/collab.types'
-import type { MeResponse } from '@/auth/auth.types'
+import { useCreateTask } from '@/features/collab/hooks'
+import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/features/collab/model'
+import type { MeResponse } from '@/shared/types'
 
 type Subtask = { id: string; title: string; is_completed: boolean; assignee_sub: string | null }
 
@@ -48,7 +45,6 @@ export function CreateTaskModal({
   onCreated,
   onError,
 }: Props) {
-  const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<ProjectTask['priority']>('medium')
@@ -60,33 +56,6 @@ export function CreateTaskModal({
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('none')
 
   const canAssign = identity.role === 'admin' || identity.role === 'worker'
-  const workerMembers = members.filter((m) => m.role === 'worker' && Boolean(m.email))
-  const selectedWorkers = workerMembers.filter((m) => selectedWorkerSubs.includes(m.userSub))
-  const columnId = column?.id ?? ''
-
-  const createTask = useMutation({
-    mutationFn: () =>
-      createTaskRequest(accessToken, projectId, {
-        column_id: columnId,
-        title: title.trim(),
-        description: description.trim() || undefined,
-        priority,
-        assignees: selectedWorkers.map((w) => ({ user_sub: w.userSub, user_email: w.email! })),
-        due_date: deadline || undefined,
-        client_visible: clientVis,
-        checklist_progress: 0,
-        position: (tasksByColumn[columnId] ?? []).length,
-        subtasks,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
-      handleClose()
-      onCreated()
-    },
-    onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo crear la tarea')),
-  })
 
   const handleClose = () => {
     setTitle('')
@@ -101,10 +70,23 @@ export function CreateTaskModal({
     onClose()
   }
 
-  useEffect(() => {
-    if (!open) return
-    setPriority('medium')
-  }, [open, columnId])
+  const { createTask, workerMembers, selectedWorkers, columnId } = useCreateTask({
+    accessToken,
+    projectId,
+    column,
+    tasksByColumn,
+    members,
+    selectedWorkerSubs,
+    title,
+    description,
+    priority,
+    deadline,
+    clientVis,
+    subtasks,
+    onCreated,
+    onError,
+    handleClose,
+  })
 
   const canSubmit = title.trim().length >= 2 && !!columnId
 
@@ -311,3 +293,7 @@ export function CreateTaskModal({
     </Dialog>
   )
 }
+
+
+
+

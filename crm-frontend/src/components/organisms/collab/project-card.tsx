@@ -1,6 +1,6 @@
-import { Bell, User } from 'lucide-react'
+﻿import { Bell, User } from 'lucide-react'
 import { ProjectTypeBadge } from '@/components/molecules/project-type-badge'
-import type { ProjectListItem } from '@/collab/collab.types'
+import type { ProjectListItem } from '@/features/collab/model'
 
 type Props = {
   project: ProjectListItem
@@ -71,3 +71,4 @@ export function ProjectCard({ project, onClick }: Props) {
     </button>
   )
 }
+

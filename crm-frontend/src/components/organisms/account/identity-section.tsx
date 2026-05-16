@@ -1,13 +1,11 @@
-import { useMutation } from '@tanstack/react-query'
 import { CheckCircle2, MailWarning } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SectionIntro } from '@/components/molecules/section-intro'
-import { requestEmailVerificationRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
-import type { MeResponse } from '@/auth/auth.types'
+import type { MeResponse } from '@/features/auth/model'
+import { useEmailVerificationRequest } from '@/features/auth/hooks'
 
 type Props = {
   accessToken: string
@@ -17,16 +15,7 @@ type Props = {
 /** Organismo: seccion de identidad del usuario - estado de verificacion de correo. */
 export function IdentitySection({ accessToken, identity }: Props) {
   const isVerified = Boolean(identity.emailVerifiedAt)
-
-  const verifyMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        return await requestEmailVerificationRequest(accessToken)
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-  })
+  const verifyMutation = useEmailVerificationRequest(accessToken)
 
   return (
     <section className="flex h-full flex-col space-y-4">

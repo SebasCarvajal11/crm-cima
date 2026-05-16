@@ -10,14 +10,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { listProjectsRequest, searchProjectsRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+import { listProjectsRequest, searchProjectsRequest } from '@/features/collab/api'
+import { collabKeys } from '@/features/collab/model'
 import { PARENT_COLUMNS } from './collab/collab.config'
 import { ProjectCard } from './collab/project-card'
 import { ProjectWorkspace } from './collab/project-workspace'
 import { CreateProjectModal } from './collab/create-project-modal'
-import type { ProjectListItem, ParentProjectStatus } from '@/collab/collab.types'
-import type { MeResponse } from '@/auth/auth.types'
+import type { ProjectListItem, ParentProjectStatus } from '@/features/collab/model'
+import type { MeResponse } from '@/shared/types'
 
 /** Alto del area con scroll por columna del tablero padre (px). Solo tablero de proyectos. */
 const PARENT_BOARD_COLUMN_BODY_HEIGHT_PX = 620
@@ -35,9 +35,8 @@ type Props = {
 
 /** Organismo raiz del panel de colaboracion. Gestiona la navegacion entre tablero padre y workspace. */
 export function CollabPanel({ accessToken, identity, initialProjects, initialOpenProjectId, initialWorkspaceTab, initialOpenChannel, initialOpenMessageId }: Props) {
-  const [openProjectId, setOpenProjectId] = useState<string | null>(null)
+  const [openProjectId, setOpenProjectId] = useState<string | null>(initialOpenProjectId ?? null)
   const [showModal,     setShowModal]     = useState(false)
-  const [initialJumpUsed, setInitialJumpUsed] = useState(false)
   const [projectSearchText, setProjectSearchText] = useState('')
   const [projectSearchDebounced, setProjectSearchDebounced] = useState('')
   const navigate = useNavigate({ from: '/dashboard' })
@@ -48,9 +47,9 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
   const projectsQ = useQuery({
     queryKey: collabKeys.projects(),
     queryFn:  () => listProjectsRequest(accessToken, { page: 1, limit: 100 }),
-    initialData: initialProjects ? { data: initialProjects } : undefined,
+    initialData: initialProjects ? { data: { items: initialProjects, page: 1, limit: initialProjects.length || 1, total: initialProjects.length, total_pages: 1 } } : undefined,
   })
-  const projects = projectsQ.data?.data.items ?? []
+  const projects = useMemo(() => projectsQ.data?.data.items ?? [], [projectsQ.data])
 
   useEffect(() => {
     const t = window.setTimeout(() => setProjectSearchDebounced(projectSearchText.trim()), 180)
@@ -63,13 +62,6 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
     enabled: projectSearchDebounced.length >= 2,
     staleTime: 20_000,
   })
-
-  useEffect(() => {
-    if (initialJumpUsed) return
-    if (!initialOpenProjectId) return
-    setOpenProjectId(initialOpenProjectId)
-    setInitialJumpUsed(true)
-  }, [initialJumpUsed, initialOpenProjectId])
 
   useEffect(() => {
     navigate({
@@ -260,3 +252,7 @@ export function CollabPanel({ accessToken, identity, initialProjects, initialOpe
     </div>
   )
 }
+
+
+
+

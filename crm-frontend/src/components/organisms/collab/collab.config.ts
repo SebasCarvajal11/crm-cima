@@ -1,5 +1,5 @@
-import { CheckCircle2, Clock, Layers, Zap } from 'lucide-react'
-import type { ParentProjectStatus, ProjectTask } from '@/collab/collab.types'
+﻿import { CheckCircle2, Clock, Layers, Zap } from 'lucide-react'
+import type { ParentProjectStatus, ProjectTask } from '@/features/collab/model'
 import React from 'react'
 
 /** Columnas del tablero kanban padre (por estado de proyecto). */
@@ -57,3 +57,4 @@ export const STATUS_DOT: Record<ParentProjectStatus, string> = {
 export const PRIORITY_WEIGHT: Record<ProjectTask['priority'], number> = {
   urgent: 4, high: 3, medium: 2, low: 1,
 }
+

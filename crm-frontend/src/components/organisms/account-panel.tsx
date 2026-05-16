@@ -1,7 +1,7 @@
-import { ProfileSection } from './account/profile-section'
+﻿import { ProfileSection } from './account/profile-section'
 import { SessionsSection } from './account/sessions-section'
 import { ChangePasswordSection } from './account/change-password-section'
-import type { MeResponse } from '@/auth/auth.types'
+import type { MeResponse } from '@/features/auth/model'
 
 type Props = {
   accessToken: string
@@ -20,3 +20,4 @@ export function AccountPanel({ accessToken, identity }: Props) {
     </div>
   )
 }
+

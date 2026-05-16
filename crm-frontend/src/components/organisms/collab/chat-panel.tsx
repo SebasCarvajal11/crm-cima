@@ -1,23 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, CheckCheck, MessageSquare, Send, Shield, User, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { parseApiError } from '@/auth/parse-api-error'
-import {
-  listExternalChatRequest,
-  listInternalChatRequest,
-  postExternalChatRequest,
-  postInternalChatRequest,
-  markExternalChatReadRequest,
-  markInternalChatReadRequest,
-} from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+import { useProjectChatData, useProjectChatSend } from '@/features/collab/hooks'
 import { buildMentionSuggestions, extractActiveMentionQuery, mentionHints, resolveMentionsFromBody } from './chat-mentions'
-import type { PaginatedData, ProjectChatMessage, ProjectMember } from '@/collab/collab.types'
-import type { MeResponse } from '@/auth/auth.types'
-import { getUserAvatarsRequest } from '@/media/media-api'
-import { pickAvatarUrl } from '@/media/avatar-utils'
+import type { ProjectChatMessage, ProjectMember } from '@/features/collab/model'
+import type { MeResponse } from '@/shared/types'
+import { pickAvatarUrl } from '@/features/media/utils'
 
 type Channel = 'external' | 'internal'
 
@@ -78,11 +67,11 @@ const formatDaySeparator = (iso: string): string => {
 }
 
 export function ChatPanel({ accessToken, projectId, identity, isClient, initialChannel, initialMessageId, members, onError }: Props) {
-  const queryClient = useQueryClient()
   const [channel, setChannel] = useState<Channel>(initialChannel ?? 'external')
   const [body, setBody] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
-  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(initialMessageId ?? null)
+  const [cursorPos, setCursorPos] = useState(0)
   const logRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -91,30 +80,16 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
   const initializedScrollRef = useRef<Record<Channel, boolean>>({ external: false, internal: false })
   const stickToBottomRef = useRef<Record<Channel, boolean>>({ external: true, internal: true })
 
-  const externalQ = useQuery({
-    queryKey: collabKeys.chatExternal(projectId),
-    queryFn: () => listExternalChatRequest(accessToken, projectId),
-    staleTime: 15_000,
+  const { messages, memberBySub, avatarBySub } = useProjectChatData({
+    accessToken,
+    projectId,
+    isClient,
+    channel,
+    members,
+    lastMarkedRef,
   })
-  const internalQ = useQuery({
-    queryKey: collabKeys.chatInternal(projectId),
-    queryFn: () => listInternalChatRequest(accessToken, projectId),
-    enabled: !isClient,
-    staleTime: 15_000,
-  })
-  const messages = channel === 'external' ? (externalQ.data?.data.items ?? []) : (internalQ.data?.data.items ?? [])
-  const lastMessageId = messages[messages.length - 1]?.id ?? null
-  const memberBySub = useMemo(() => new Map(members.map((member) => [member.userSub, member] as const)), [members])
-  const avatarSubjects = useMemo(() => Array.from(new Set(members.map((m) => m.userSub))), [members])
-  const avatarsQ = useQuery({
-    queryKey: ['media', 'avatars', 'users', projectId, avatarSubjects.join(',')],
-    queryFn: () => getUserAvatarsRequest(accessToken, avatarSubjects),
-    enabled: avatarSubjects.length > 0,
-    staleTime: 60_000,
-  })
-  const avatarBySub = avatarsQ.data?.data.items ?? {}
 
-  const mentionQuery = useMemo(() => extractActiveMentionQuery(body, textareaRef.current?.selectionStart ?? body.length), [body])
+  const mentionQuery = useMemo(() => extractActiveMentionQuery(body, cursorPos || body.length), [body, cursorPos])
   const mentionSuggestions = useMemo(() => mentionQuery ? buildMentionSuggestions(mentionQuery.query, identity.role, members) : [], [mentionQuery, identity.role, members])
 
   useLayoutEffect(() => {
@@ -157,10 +132,6 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
       resizeObserver.disconnect()
     }
   }, [channel, messages.length])
-  useEffect(() => { setActiveIdx(0) }, [mentionQuery?.query, mentionSuggestions.length])
-  useEffect(() => { if (initialChannel) setChannel(initialChannel) }, [initialChannel])
-  useEffect(() => { setHighlightMessageId(initialMessageId ?? null) }, [initialMessageId])
-
   useEffect(() => {
     if (!highlightMessageId || messages.length === 0) return
     const node = logRef.current?.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`)
@@ -169,19 +140,6 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
     const timer = window.setTimeout(() => setHighlightMessageId((current) => (current === highlightMessageId ? null : current)), 2200)
     return () => window.clearTimeout(timer)
   }, [highlightMessageId, messages])
-
-  useEffect(() => {
-    if (!lastMessageId) return
-    if (lastMarkedRef.current[channel] === lastMessageId) return
-    lastMarkedRef.current[channel] = lastMessageId
-    const req = channel === 'external' ? markExternalChatReadRequest : markInternalChatReadRequest
-    void req(accessToken, projectId, { up_to_message_id: lastMessageId })
-      .then(() => {
-        void queryClient.invalidateQueries({ queryKey: collabKeys.mentionNotifications() })
-        void queryClient.invalidateQueries({ queryKey: collabKeys.mentionNotificationsCount() })
-      })
-      .catch(() => undefined)
-  }, [accessToken, projectId, channel, lastMessageId, queryClient])
 
   const getDisplayName = (msg: ProjectChatMessage): string => {
     const member = msg.authorSub ? memberBySub.get(msg.authorSub) : undefined
@@ -209,82 +167,22 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
     const after = body.slice(caret)
     const next = `${before}@${value} ${after}`
     setBody(next)
+    setActiveIdx(0)
     requestAnimationFrame(() => {
       const pos = before.length + value.length + 2
       textareaRef.current?.focus()
       textareaRef.current?.setSelectionRange(pos, pos)
+      setCursorPos(pos)
     })
   }
 
-  const queryKey = channel === 'external' ? collabKeys.chatExternal(projectId) : collabKeys.chatInternal(projectId)
-  const postMessageRequest = channel === 'external' ? postExternalChatRequest : postInternalChatRequest
-
-  const send = useMutation({
-    mutationFn: async ({
-      trimmedBody,
-      mentions,
-    }: {
-      trimmedBody: string
-      mentions: string[]
-    }) => {
-      return postMessageRequest(accessToken, projectId, { body: trimmedBody, mentions })
-    },
-    onMutate: async ({ trimmedBody, mentions }) => {
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<{ data: PaginatedData<ProjectChatMessage> }>(queryKey)
-      const optimisticId = `temp-${channel}-${Date.now()}`
-      const optimisticMessage: ProjectChatMessage = {
-        id: optimisticId,
-        projectId,
-        channel,
-        messageType: 'text',
-        authorSub: identity.id,
-        authorEmail: identity.email ?? null,
-        authorFirstName: identity.first_name ?? null,
-        authorLastName: identity.last_name ?? null,
-        authorRole: identity.role ?? null,
-        authorProfession: identity.profession ?? null,
-        body: trimmedBody,
-        mentionedSubs: mentions.length > 0 ? mentions : null,
-        metadata: null,
-        createdAt: new Date().toISOString(),
-        readStatus: {
-          isSeen: false,
-          requiredCount: 0,
-          seenCount: 0,
-        },
-      }
-
-      queryClient.setQueryData(queryKey, (current: { data: PaginatedData<ProjectChatMessage> } | undefined) => ({
-        data: current?.data
-          ? { ...current.data, items: [...current.data.items, optimisticMessage] }
-          : { items: [optimisticMessage], page: 1, limit: 100, total: 1, total_pages: 1 },
-      }))
-      setBody('')
-
-      return {
-        previous,
-        optimisticId,
-        trimmedBody,
-      }
-    },
-    onSuccess: (res, _variables, context) => {
-      queryClient.setQueryData(queryKey, (current: { data: PaginatedData<ProjectChatMessage> } | undefined) => ({
-        data: current?.data
-          ? { ...current.data, items: current.data.items.map((message) => (message.id === context?.optimisticId ? res.data.data : message)) }
-          : current?.data,
-      }))
-    },
-    onError: async (error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous)
-      }
-      if (context?.trimmedBody) {
-        setBody(context.trimmedBody)
-      }
-      const message = await parseApiError(error)
-      onError(message || 'No se pudo enviar el mensaje')
-    },
+  const { send } = useProjectChatSend({
+    accessToken,
+    projectId,
+    channel,
+    identity,
+    onError,
+    setBody,
   })
 
   return (
@@ -409,17 +307,22 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
               ref={textareaRef}
               placeholder={`Escribe un mensaje ${channel === 'internal' ? 'al equipo' : 'al cliente'}... Usa @ para mencionar`}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value)
+                setActiveIdx(0)
+                setCursorPos(e.target.selectionStart ?? e.target.value.length)
+              }}
               onKeyDown={(e) => {
                 if (mentionSuggestions.length > 0) {
                   if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => (i + 1) % mentionSuggestions.length); return }
                   if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length); return }
                   if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
                     e.preventDefault()
-                    applyMention(mentionSuggestions[activeIdx]?.value ?? mentionSuggestions[0].value)
+                    const idx = activeIdx < mentionSuggestions.length ? activeIdx : 0
+                    applyMention(mentionSuggestions[idx]?.value ?? mentionSuggestions[0].value)
                     return
                   }
-                  if (e.key === 'Escape') { e.preventDefault(); setBody((v) => `${v} `); return }
+                  if (e.key === 'Escape') { e.preventDefault(); setBody((v) => `${v} `); setActiveIdx(0); return }
                 }
                 if (e.key === 'Enter' && !e.shiftKey && body.trim()) {
                   e.preventDefault()
@@ -433,6 +336,7 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
               className="min-h-[44px] max-h-28 resize-none text-sm"
               rows={1}
               aria-label="Escribir mensaje"
+              onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart ?? body.length)}
             />
           </div>
           <Button
@@ -470,3 +374,6 @@ export function ChatPanel({ accessToken, projectId, identity, isClient, initialC
     </div>
   )
 }
+
+
+

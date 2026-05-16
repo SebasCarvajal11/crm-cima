@@ -10,7 +10,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import type { AdminUserRow } from '@/auth/auth.types'
+import type { AdminUserRow } from '@/features/admin/model'
 
 type MutationHandle<T> = {
   mutate: (arg: T) => void
@@ -74,3 +74,5 @@ export function AdminUserActions({ row, patchStatus, patchFlags, softDelete, res
     </div>
   )
 }
+
+

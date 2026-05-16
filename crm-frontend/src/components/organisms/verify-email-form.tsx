@@ -1,9 +1,7 @@
-import { useMutation } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+﻿import { Link, useNavigate } from '@tanstack/react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { verifyEmailRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
+import { useVerifyEmailFlow } from '@/features/auth/hooks'
 
 type VerifyEmailFormProps = {
   token?: string
@@ -12,25 +10,15 @@ type VerifyEmailFormProps = {
 /** Organismo: confirmar correo con token recibido por enlace. */
 export function VerifyEmailForm({ token }: VerifyEmailFormProps) {
   const navigate = useNavigate()
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!token) throw new Error('Falta el token de verificación.')
-      try {
-        return await verifyEmailRequest({ token })
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-  })
+  const mutation = useVerifyEmailFlow(token)
 
   if (!token) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Enlace no válido</AlertTitle>
+        <AlertTitle>Enlace no valido</AlertTitle>
         <AlertDescription>
-          Falta el parámetro <code className="rounded bg-muted px-1">token</code> en la URL.
-          Solicita un nuevo envío desde tu cuenta.
+          Falta el parametro <code className="rounded bg-muted px-1">token</code> en la URL.
+          Solicita un nuevo envio desde tu cuenta.
         </AlertDescription>
       </Alert>
     )
@@ -44,7 +32,7 @@ export function VerifyEmailForm({ token }: VerifyEmailFormProps) {
           <AlertDescription>{mutation.data.message}</AlertDescription>
         </Alert>
         <Button className="w-full" onClick={() => navigate({ to: '/login' })}>
-          Ir al inicio de sesión
+          Ir al inicio de sesion
         </Button>
       </div>
     )
@@ -72,15 +60,14 @@ export function VerifyEmailForm({ token }: VerifyEmailFormProps) {
         disabled={mutation.isPending}
         onClick={() => mutation.mutate()}
       >
-        {mutation.isPending ? 'Verificando…' : 'Verificar correo'}
+        {mutation.isPending ? 'Verificando...' : 'Verificar correo'}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
         <Link to="/login" className="underline underline-offset-4 hover:text-foreground">
-          Volver al inicio de sesión
+          Volver al inicio de sesion
         </Link>
       </p>
     </div>
   )
 }
-

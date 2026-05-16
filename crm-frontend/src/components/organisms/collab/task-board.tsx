@@ -4,8 +4,8 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { TaskColumn } from './task-column'
 import { TaskSheet } from './task-sheet'
 import { CreateTaskModal } from './create-task-modal'
-import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/collab/collab.types'
-import type { MeResponse } from '@/auth/auth.types'
+import type { ProjectMember, ProjectTask, ProjectTaskColumn } from '@/features/collab/model'
+import type { MeResponse } from '@/shared/types'
 
 type Props = {
   accessToken: string
@@ -116,3 +116,6 @@ export function TaskBoard({
     </div>
   )
 }
+
+
+

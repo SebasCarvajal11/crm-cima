@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Search, User } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { searchClientsRequest } from '@/auth/auth-api'
-import type { ClientSearchResult } from '@/auth/auth-api'
-import type { UserRole } from '@/auth/auth.types'
+import { searchClientsRequest } from '@/features/auth/api'
+import type { ClientSearchResult } from '@/shared/types'
+import type { UserRole } from '@/shared/types'
 
 type Props = {
   accessToken: string
@@ -28,8 +28,9 @@ export function UserSearch({ accessToken, role, selected, onSelect, placeholder,
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    if (query.length < 2) { setDebounced(''); return }
-    timerRef.current = setTimeout(() => setDebounced(query), 350)
+    timerRef.current = setTimeout(() => {
+      setDebounced(query.length < 2 ? '' : query)
+    }, 350)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [query])
 
@@ -85,3 +86,5 @@ export function UserSearch({ accessToken, role, selected, onSelect, placeholder,
     </div>
   )
 }
+
+

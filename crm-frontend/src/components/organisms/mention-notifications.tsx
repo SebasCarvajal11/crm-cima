@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, MessageSquare, X } from 'lucide-react'
 import {
   listUnreadMentionNotificationsRequest,
   markMentionNotificationSeenRequest,
-} from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+} from '@/features/collab/api'
+import { collabKeys } from '@/features/collab/model'
 
 type Props = {
   accessToken: string
@@ -103,7 +103,7 @@ export function MentionNotifications({ accessToken, onOpenNotification }: Props)
                 className="mb-1 w-full rounded-lg border px-3 py-2 text-left hover:bg-muted"
               >
                 <p className="text-xs font-semibold text-primary">{n.project_name}</p>
-                <p className="text-xs text-muted-foreground">{n.author_name} · {formatWhen(n.created_at)}</p>
+                <p className="text-xs text-muted-foreground">{n.author_name} Â· {formatWhen(n.created_at)}</p>
                 <p className="mt-1 text-sm line-clamp-2">{n.message_preview}</p>
                 <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   <MessageSquare className="size-3" />
@@ -117,3 +117,4 @@ export function MentionNotifications({ accessToken, onOpenNotification }: Props)
     </div>
   )
 }
+

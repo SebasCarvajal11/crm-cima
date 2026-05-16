@@ -1,7 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import Cropper, { type Area, type Point } from 'react-easy-crop'
+import Cropper from 'react-easy-crop'
 import 'react-easy-crop/react-easy-crop.css'
 import { CheckCircle2, Loader2, MailWarning, UserCircle2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -12,17 +10,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { SectionIntro } from '@/components/molecules/section-intro'
-import type { MeResponse } from '@/auth/auth.types'
-import { requestEmailVerificationRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
-import { getCurrentAvatarRequest, uploadAvatarRequest } from '@/media/media-api'
+import { useAccountProfileSection } from '@/features/auth/hooks'
+import type { MeResponse } from '@/features/auth/model'
 
 type Props = {
   accessToken: string
   identity: MeResponse['data']
 }
-
-const avatarQueryKey = (token: string) => ['media', 'avatar', 'current', token] as const
 
 const displayOrFallback = (value: string | null | undefined, fallback = 'No registrado') =>
   value?.trim() ? value : fallback
@@ -33,113 +27,26 @@ const roleLabel: Record<MeResponse['data']['role'], string> = {
   client: 'Cliente',
 }
 
-function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.addEventListener('load', () => resolve(image))
-    image.addEventListener('error', reject)
-    image.src = url
-  })
-}
-
-async function getCroppedFile(imageSrc: string, pixelCrop: Area): Promise<File> {
-  const image = await createImage(imageSrc)
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('No se pudo preparar canvas para recorte')
-
-  canvas.width = pixelCrop.width
-  canvas.height = pixelCrop.height
-
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    pixelCrop.width,
-    pixelCrop.height
-  )
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', 0.95)
-  })
-
-  if (!blob) throw new Error('No se pudo generar imagen recortada')
-  return new File([blob], `avatar-${Date.now()}.jpg`, { type: 'image/jpeg' })
-}
-
 export function ProfileSection({ accessToken, identity }: Props) {
-  const queryClient = useQueryClient()
-  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const isVerified = Boolean(identity.emailVerifiedAt)
-
-  const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null)
-  const [photoViewerOpen, setPhotoViewerOpen] = useState(false)
-  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
-
-  const avatarQ = useQuery({
-    queryKey: avatarQueryKey(accessToken),
-    queryFn: () => getCurrentAvatarRequest(accessToken),
-    retry: false,
-  })
-
-  const avatarUrl = useMemo(() => {
-    const urls = avatarQ.data?.data.urls
-    return urls?.['512'] ?? urls?.['256'] ?? urls?.['64'] ?? null
-  }, [avatarQ.data])
-
-  const uploadAvatarMutation = useMutation({
-    mutationFn: async (file: File) => {
-      try {
-        return await uploadAvatarRequest(accessToken, file)
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: avatarQueryKey(accessToken) })
-      setSelectedImageSrc(null)
-      setCrop({ x: 0, y: 0 })
-      setZoom(1)
-      setCroppedAreaPixels(null)
-    },
-  })
-
-  const verifyMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        return await requestEmailVerificationRequest(accessToken)
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-  })
-
-  const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
-    setCroppedAreaPixels(areaPixels)
-  }, [])
-
-  const onAvatarFileSelect: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    const src = URL.createObjectURL(file)
-    setSelectedImageSrc(src)
-    setCrop({ x: 0, y: 0 })
-    setZoom(1)
-    setCroppedAreaPixels(null)
-    event.currentTarget.value = ''
-  }
-
-  const onSaveCroppedAvatar = async () => {
-    if (!selectedImageSrc || !croppedAreaPixels) return
-    const file = await getCroppedFile(selectedImageSrc, croppedAreaPixels)
-    uploadAvatarMutation.mutate(file)
-  }
+  const {
+    avatarInputRef,
+    avatarUrl,
+    crop,
+    croppedAreaPixels,
+    onAvatarFileSelect,
+    onCropComplete,
+    onSaveCroppedAvatar,
+    photoViewerOpen,
+    selectedImageSrc,
+    setCrop,
+    setPhotoViewerOpen,
+    setSelectedImageSrc,
+    setZoom,
+    uploadAvatarMutation,
+    verifyMutation,
+    zoom,
+  } = useAccountProfileSection(accessToken)
 
   return (
     <section className="space-y-4">

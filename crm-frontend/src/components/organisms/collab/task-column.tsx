@@ -1,13 +1,13 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Plus, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TaskCard } from './task-card'
-import type { ProjectTask, ProjectTaskColumn } from '@/collab/collab.types'
+import type { ProjectTask, ProjectTaskColumn } from '@/features/collab/model'
 
 /**
  * Alto fijo del area de tareas (en px).
- * Todas las columnas comparten este valor → aspecto uniforme independiente del contenido.
+ * Todas las columnas comparten este valor â†’ aspecto uniforme independiente del contenido.
  * Cambiar solo aqui para ajustar globalmente.
  */
 const COLUMN_BODY_HEIGHT = 520
@@ -101,3 +101,4 @@ export function TaskColumn({ column, tasks, selectedTaskId, canDrag, canCreateTa
     </section>
   )
 }
+

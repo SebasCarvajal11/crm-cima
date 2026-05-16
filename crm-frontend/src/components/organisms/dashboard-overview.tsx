@@ -10,9 +10,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SectionIntro } from '@/components/molecules/section-intro'
-import { gatewayContractPaths } from '@/auth/contract-reference'
-import { getApiBaseUrl } from '@/auth/session-store'
-import type { MeResponse } from '@/auth/auth.types'
+import { gatewayContractPaths } from '@/features/auth/utils'
+import { getApiBaseUrl } from '@/app/session/session-store'
+import type { MeResponse } from '@/features/auth/model'
 
 type DashboardOverviewProps = {
   identity: MeResponse['data']
@@ -96,3 +96,5 @@ export function DashboardOverview({ identity }: DashboardOverviewProps) {
     </div>
   )
 }
+
+

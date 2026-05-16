@@ -1,28 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, FileText, KanbanSquare, MessageSquare, User, Users } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProjectTypeBadge } from '@/components/molecules/project-type-badge'
-import { parseApiError } from '@/auth/parse-api-error'
-import {
-  getBriefRequest,
-  getProjectBoardRequest,
-  listExternalChatRequest,
-  listFormalChangeLogRequest,
-  listInternalChatRequest,
-  patchTaskRequest,
-} from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+import { useProjectBoardMutations, useProjectWorkspaceData } from '@/features/collab/hooks'
 import { PARENT_COLUMNS, PRIORITY_WEIGHT, STATUS_DOT } from './collab.config'
 import { TaskBoard } from './task-board'
 import { ConversationPanel } from './conversation-panel'
 import { BriefPanel } from './brief-panel'
 import { ProjectMembers } from './project-members'
-import type { Project, ProjectListItem, ProjectTask } from '@/collab/collab.types'
-import type { MeResponse } from '@/auth/auth.types'
+import type { Project, ProjectListItem, ProjectTask } from '@/features/collab/model'
+import type { MeResponse } from '@/shared/types'
 
 type WorkspaceTab = 'board' | 'chat' | 'brief' | 'members'
 
@@ -52,36 +42,21 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
   const [taskSearchText, setTaskSearchText] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
-  const queryClient = useQueryClient()
   const navigate = useNavigate({ from: '/dashboard' })
 
   const isClient   = identity.role === 'client'
   const canOperate = identity.role === 'admin' || identity.role === 'worker'
 
-  const boardQ = useQuery({
-    queryKey: collabKeys.projectBoard(projectId),
-    queryFn:  () => getProjectBoardRequest(accessToken, projectId),
-    staleTime: 30_000,
+  const { boardQ, briefQ } = useProjectWorkspaceData({
+    accessToken,
+    projectId,
+    activeTab,
+    isClient,
   })
-  const briefQ = useQuery({
-    queryKey: [...collabKeys.brief(projectId), 'panel'],
-    queryFn: async () => {
-      const [briefRes, formalRes] = await Promise.all([
-        getBriefRequest(accessToken, projectId),
-        listFormalChangeLogRequest(accessToken, projectId),
-      ])
-      return {
-        brief: briefRes.data ?? null,
-        formalChanges: (formalRes.data.items ?? []).map((row) => ({
-          id: row.id,
-          title: row.description,
-          status: 'approved',
-          createdAt: row.createdAt,
-        })),
-      }
-    },
-    enabled: activeTab === 'brief',
-    staleTime: 60_000,
+  const { moveTask, invalidateBoardScope } = useProjectBoardMutations({
+    accessToken,
+    projectId,
+    onError: (message) => setErrorMsg(message),
   })
 
   const boardData = boardQ.data?.data
@@ -115,11 +90,6 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
   }, [boardColumns, boardTasks, taskSearchText])
 
   useEffect(() => {
-    if (!initialWorkspaceTab) return
-    setActiveTab(initialWorkspaceTab)
-  }, [initialWorkspaceTab])
-
-  useEffect(() => {
     navigate({
       to: '/dashboard',
       search: (prev) => ({
@@ -131,41 +101,6 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
       replace: true,
     })
   }, [navigate, projectId, activeTab])
-
-  useEffect(() => {
-    void queryClient.prefetchQuery({
-      queryKey: collabKeys.chatExternal(projectId),
-      queryFn: () => listExternalChatRequest(accessToken, projectId),
-      staleTime: 15_000,
-    })
-    if (!isClient) {
-      void queryClient.prefetchQuery({
-        queryKey: collabKeys.chatInternal(projectId),
-        queryFn: () => listInternalChatRequest(accessToken, projectId),
-        staleTime: 15_000,
-      })
-    }
-
-    void queryClient.prefetchQuery({
-      queryKey: [...collabKeys.brief(projectId), 'panel'],
-      queryFn: async () => {
-        const [briefRes, formalRes] = await Promise.all([
-          getBriefRequest(accessToken, projectId),
-          listFormalChangeLogRequest(accessToken, projectId),
-        ])
-        return {
-          brief: briefRes.data ?? null,
-          formalChanges: (formalRes.data.items ?? []).map((row) => ({
-            id: row.id,
-            title: row.description,
-            status: 'approved',
-            createdAt: row.createdAt,
-          })),
-        }
-      },
-      staleTime: 60_000,
-    })
-  }, [accessToken, isClient, projectId, queryClient])
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, ProjectTask[]> = {}
@@ -179,17 +114,6 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
     }
     return map
   }, [boardColumns, boardTasks])
-
-  const moveTask = useMutation({
-    mutationFn: ({ taskId, targetColumnId, position }: { taskId: string; targetColumnId: string; position: number }) =>
-      patchTaskRequest(accessToken, taskId, { column_id: targetColumnId, position }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
-    },
-    onError: (e) => parseApiError(e).then((m) => setErrorMsg(m || 'No se pudo mover la tarea')),
-  })
 
   const status = project?.status ? PARENT_COLUMNS.find((c) => c.key === project.status) : null
   const pct    = project?.progressPercent ?? 0
@@ -333,9 +257,7 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
                 moveTask.mutate({ taskId, targetColumnId, position: (tasksByColumn[targetColumnId] ?? []).length })
               }}
               onTaskSaved={() => {
-                void queryClient.invalidateQueries({ queryKey: collabKeys.projectBoard(projectId) })
-                void queryClient.invalidateQueries({ queryKey: collabKeys.projects() })
-                void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
+                invalidateBoardScope()
               }}
               onError={setErrorMsg}
               focusedTaskId={focusedTaskId}
@@ -383,3 +305,6 @@ export function ProjectWorkspace({ accessToken, identity, projectId, projectMeta
     </div>
   )
 }
+
+
+

@@ -1,25 +1,13 @@
 ﻿import { useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { parseApiError } from '@/auth/parse-api-error'
-import {
-  listTaskFilesRequest,
-  uploadTaskFileRequest,
-} from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectFile } from '@/collab/collab.types'
-import { uploadDocumentRequest } from '@/media/media-api'
-import { isBlockedByExtension, SAFE_FILE_ACCEPT } from '@/media/file-security'
+import { useTaskFiles } from '@/features/collab/hooks'
+import { downloadGatewayFile, formatFileSize } from '@/features/collab/utils'
+import { isBlockedByExtension, SAFE_FILE_ACCEPT } from '@/features/media/utils'
 
-const fmtSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 const MAX_FILE_BYTES = 25 * 1024 * 1024
 
 type Props = {
@@ -32,7 +20,6 @@ type Props = {
 
 /** Organismo: pestana de archivos adjuntos de una tarea especifica. */
 export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onError }: Props) {
-  const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showForm, setShowForm] = useState(false)
   const [fileTitle, setFileTitle] = useState('')
@@ -41,39 +28,19 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
   const [fileError, setFileError] = useState<string | null>(null)
   const [busyDownloadId, setBusyDownloadId] = useState<string | null>(null)
 
-  const filesQ = useQuery({
-    queryKey: collabKeys.taskFiles(taskId),
-    queryFn: () => listTaskFilesRequest(accessToken, projectId, taskId),
-  })
-  const files = (filesQ.data?.data ?? []) as ProjectFile[]
-
-  const upload = useMutation({
-    mutationFn: () => {
-      if (!selectedFile) throw new Error('No hay archivo seleccionado')
-      return uploadDocumentRequest(accessToken, selectedFile).then((mediaRes) =>
-        uploadTaskFileRequest(accessToken, projectId, taskId, fileTitle.trim(), fileDesc.trim(), {
-          fileName: selectedFile.name,
-          storagePath: mediaRes.data.objectKey,
-          mimeType: selectedFile.type || 'application/octet-stream',
-          sizeBytes: selectedFile.size,
-          isClientVisible: false,
-        })
-      )
-    },
-    onSuccess: () => {
+  const { filesQ, files, upload } = useTaskFiles({
+    accessToken,
+    projectId,
+    taskId,
+    onError,
+    setFileError,
+    resetForm: () => {
       setShowForm(false)
       setFileTitle('')
       setFileDesc('')
       setSelectedFile(null)
       setFileError(null)
-      void queryClient.invalidateQueries({ queryKey: collabKeys.taskFiles(taskId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.files(projectId) })
-      void queryClient.invalidateQueries({ queryKey: collabKeys.timeline(projectId) })
     },
-    onError: (e) => parseApiError(e).then((m) => {
-      setFileError(m || 'No se pudo subir el archivo')
-      onError(m || 'Error al subir archivo')
-    }),
   })
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,19 +65,7 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
   const openDownload = async (fileId: string, fileName: string) => {
     try {
       setBusyDownloadId(fileId)
-      const res = await fetch(`/api/files/${fileId}/download`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-      if (!res.ok) throw new Error(`No se pudo descargar (${res.status})`)
-      const blob = await res.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(objectUrl)
+      await downloadGatewayFile(accessToken, fileId, fileName)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'No se pudo descargar el archivo'
       onError(msg)
@@ -137,7 +92,7 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="tf-desc" className="text-xs">Descripcion <span className="text-destructive">*</span></Label>
-            <Textarea id="tf-desc" placeholder="Explica que contiene este archivo…" value={fileDesc}
+            <Textarea id="tf-desc" placeholder="Explica que contiene este archivo..." value={fileDesc}
               onChange={(e) => setFileDesc(e.target.value)} className="min-h-[60px] resize-none text-sm" />
           </div>
           <div className="space-y-1.5">
@@ -153,15 +108,15 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
             <Button type="button" variant="outline" size="sm" className="w-full justify-start gap-2 text-sm font-normal"
               onClick={() => fileInputRef.current?.click()}>
               <Paperclip className="size-3.5 shrink-0" aria-hidden="true" />
-              {selectedFile ? selectedFile.name : 'Seleccionar archivo…'}
+              {selectedFile ? selectedFile.name : 'Seleccionar archivo...'}
             </Button>
-            {selectedFile && <p className="text-xs text-muted-foreground">{fmtSize(selectedFile.size)}</p>}
+            {selectedFile && <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>}
           </div>
           {fileError && <p className="text-xs text-destructive" role="alert">{fileError}</p>}
           <Button size="sm" className="w-full"
             disabled={!fileTitle.trim() || !fileDesc.trim() || !selectedFile || upload.isPending}
-            onClick={() => upload.mutate()}>
-            {upload.isPending ? 'Subiendo…' : 'Subir archivo'}
+            onClick={() => upload.mutate({ selectedFile, fileTitle, fileDesc })}>
+            {upload.isPending ? 'Subiendo...' : 'Subir archivo'}
           </Button>
         </div>
       )}
@@ -180,7 +135,7 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
                 <p className="truncate text-sm font-medium">{f.title ?? f.fileName}</p>
                 {f.description && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{f.description}</p>}
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">{fmtSize(f.sizeBytes)}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatFileSize(f.sizeBytes)}</span>
                   <span className="text-[10px] text-muted-foreground" suppressHydrationWarning>
                     {new Date(f.createdAt).toLocaleDateString('es', { dateStyle: 'short' })}
                   </span>
@@ -205,3 +160,4 @@ export function TaskFilesTab({ accessToken, projectId, taskId, canUpload, onErro
     </div>
   )
 }
+

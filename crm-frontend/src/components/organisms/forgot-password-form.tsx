@@ -1,5 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+﻿import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from '@tanstack/react-router'
@@ -7,26 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { FormField } from '@/components/molecules/form-field'
-import { forgotPasswordRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
+import { useForgotPasswordFlow } from '@/features/auth/hooks'
 
 const schema = z.object({
-  email: z.string().email('Correo no válido'),
+  email: z.string().email('Correo no valido'),
 })
 
 type Values = z.infer<typeof schema>
 
-/** Organismo: solicitud de enlace de recuperación vía gateway. */
+/** Organismo: solicitud de enlace de recuperacion via gateway. */
 export function ForgotPasswordForm() {
-  const mutation = useMutation({
-    mutationFn: async (body: Values) => {
-      try {
-        return await forgotPasswordRequest(body)
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-  })
+  const mutation = useForgotPasswordFlow()
 
   const {
     register,
@@ -43,12 +33,12 @@ export function ForgotPasswordForm() {
         <Alert>
           <AlertTitle>Solicitud registrada</AlertTitle>
           <AlertDescription>
-            Si el correo existe en el sistema, recibirás instrucciones para restablecer la
-            contraseña.
+            Si el correo existe en el sistema, recibiras instrucciones para restablecer la
+            contrasena.
           </AlertDescription>
         </Alert>
         <Button variant="outline" className="w-full" asChild>
-          <Link to="/login">Volver al inicio de sesión</Link>
+          <Link to="/login">Volver al inicio de sesion</Link>
         </Button>
       </div>
     )
@@ -66,11 +56,11 @@ export function ForgotPasswordForm() {
         </Alert>
       ) : null}
       <Button type="submit" className="w-full" disabled={mutation.isPending}>
-        {mutation.isPending ? 'Enviando…' : 'Enviar enlace'}
+        {mutation.isPending ? 'Enviando...' : 'Enviar enlace'}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         <Link to="/login" className="underline underline-offset-4 hover:text-foreground">
-          Volver al inicio de sesión
+          Volver al inicio de sesion
         </Link>
       </p>
     </form>

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
-import { useSessionStore } from '@/auth/session-store'
+import { useSessionStore } from '@/app/session/session-store'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -48,3 +48,4 @@ function Index() {
     </div>
   )
 }
+

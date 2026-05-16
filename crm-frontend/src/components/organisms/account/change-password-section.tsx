@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -19,21 +17,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/molecules/form-field'
 import { SectionIntro } from '@/components/molecules/section-intro'
-import { changePasswordRequest } from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
-import { strongPasswordSchema } from '@/auth/schemas/password.schema'
-import { useSessionStore } from '@/auth/session-store'
-
-const changePwdSchema = z
-  .object({
-    old_password: z.string().min(1, 'Requerido'),
-    new_password: strongPasswordSchema,
-    confirm: z.string(),
-  })
-  .refine((d) => d.new_password === d.confirm, {
-    message: 'Las contrasenas no coinciden',
-    path: ['confirm'],
-  })
+import {
+  changePasswordSchema,
+  type ChangePasswordPayload,
+  useChangePasswordFlow,
+} from '@/features/auth/hooks'
 
 type Props = {
   accessToken: string
@@ -41,50 +29,21 @@ type Props = {
 
 /** Organismo: formulario para cambiar la contrasena del usuario autenticado. */
 export function ChangePasswordSection({ accessToken }: Props) {
-  const queryClient = useQueryClient()
-  const redirectTimeoutRef = useRef<number | null>(null)
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false)
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false)
-  const [pendingPayload, setPendingPayload] = useState<z.infer<typeof changePwdSchema> | null>(null)
+  const [pendingPayload, setPendingPayload] = useState<ChangePasswordPayload | null>(null)
 
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isDirty },
-  } = useForm<z.infer<typeof changePwdSchema>>({
-    resolver: zodResolver(changePwdSchema),
+  } = useForm<ChangePasswordPayload>({
+    resolver: zodResolver(changePasswordSchema),
     defaultValues: { old_password: '', new_password: '', confirm: '' },
   })
 
-  useEffect(() => {
-    return () => {
-      if (redirectTimeoutRef.current != null) {
-        window.clearTimeout(redirectTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  const mutation = useMutation({
-    mutationFn: async (body: z.infer<typeof changePwdSchema>) => {
-      try {
-        await changePasswordRequest(accessToken, {
-          old_password: body.old_password,
-          new_password: body.new_password,
-        })
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-    onSuccess: () => {
-      reset()
-      redirectTimeoutRef.current = window.setTimeout(() => {
-        queryClient.clear()
-        useSessionStore.getState().clearSession()
-        window.location.replace('/login')
-      }, 1200)
-    },
-  })
+  const mutation = useChangePasswordFlow(accessToken)
 
   return (
     <section className="space-y-4">

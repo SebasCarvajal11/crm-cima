@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+﻿import { cn } from '@/shared/lib/utils'
 
 type SectionIntroProps = {
   title: string
@@ -6,7 +6,7 @@ type SectionIntroProps = {
   className?: string
 }
 
-/** Título + descripción reutilizable para bloques de página (molécula). */
+/** TÃ­tulo + descripciÃ³n reutilizable para bloques de pÃ¡gina (molÃ©cula). */
 export function SectionIntro({ title, description, className }: SectionIntroProps) {
   return (
     <div className={cn('space-y-1', className)}>
@@ -17,3 +17,4 @@ export function SectionIntro({ title, description, className }: SectionIntroProp
     </div>
   )
 }
+

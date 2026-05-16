@@ -1,33 +1,17 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { VerifyEmailForm } from '@/components/organisms/verify-email-form'
-import { AuthCardLayout } from '@/components/templates/auth-card-layout'
+import { createFileRoute } from '@tanstack/react-router'
+import { authPages } from '@/pages'
 
-type VerifySearch = {
-  token?: string
-}
+type VerifySearch = { token?: string }
 
 export const Route = createFileRoute('/verify-email')({
   validateSearch: (search: Record<string, unknown>): VerifySearch => ({
     token: typeof search.token === 'string' ? search.token : undefined,
   }),
-  component: VerifyEmailPage,
+  component: VerifyEmailRoute,
 })
 
-function VerifyEmailPage() {
+function VerifyEmailRoute() {
   const { token } = Route.useSearch()
-
-  return (
-    <AuthCardLayout
-      title="Verificar correo"
-      description="Confirma tu correo electrónico para finalizar la activación."
-      footer={
-        <Link to="/login" className="underline underline-offset-4 hover:text-foreground">
-          Volver al inicio de sesión
-        </Link>
-      }
-    >
-      <VerifyEmailForm token={token} />
-    </AuthCardLayout>
-  )
+  return <authPages.VerifyEmailPage token={token} />
 }
 

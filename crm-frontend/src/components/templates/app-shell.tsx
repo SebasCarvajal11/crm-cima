@@ -2,7 +2,7 @@
 import { Link } from '@tanstack/react-router'
 import { Bell, ChevronUp, LogOut, Menu, PanelLeftClose, PanelLeftOpen, User, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 export type SidebarItem = {
   key: string
@@ -445,3 +445,4 @@ export function AppShell({
     </div>
   )
 }
+

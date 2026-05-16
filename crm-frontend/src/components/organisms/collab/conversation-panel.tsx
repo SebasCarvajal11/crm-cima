@@ -1,11 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
-import { listProjectTimelineRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+import { useProjectTimeline } from '@/features/collab/hooks'
 import { ChatPanel } from './chat-panel'
 import { ConversationFilesTimeline } from './conversation-files-timeline'
 import { ConversationUploadForm } from './conversation-upload-form'
-import type { MeResponse } from '@/auth/auth.types'
-import type { ProjectMember, ProjectTask, ProjectTimelineItem } from '@/collab/collab.types'
+import type { MeResponse } from '@/shared/types'
+import type { ProjectMember, ProjectTask } from '@/features/collab/model'
 
 type Props = {
   accessToken: string
@@ -22,16 +20,12 @@ type Props = {
 export function ConversationPanel({ accessToken, projectId, identity, isClient, initialChannel, initialMessageId, members, tasks, onError }: Props) {
   const canManageFiles = identity.role === 'admin' || identity.role === 'worker'
 
-  const timelineQ = useQuery({
-    queryKey: collabKeys.timeline(projectId),
-    queryFn: () => listProjectTimelineRequest(accessToken, projectId),
-  })
-  const timeline = (timelineQ.data?.data ?? []) as ProjectTimelineItem[]
+  const { timelineQ, timeline } = useProjectTimeline({ accessToken, projectId })
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,0.8fr)_minmax(280px,0.95fr)]">
       <div className="min-w-0">
-        <ChatPanel accessToken={accessToken} projectId={projectId} identity={identity} isClient={isClient} initialChannel={initialChannel} initialMessageId={initialMessageId} members={members} onError={onError} />
+        <ChatPanel key={`${initialChannel ?? 'external'}:${initialMessageId ?? ''}`} accessToken={accessToken} projectId={projectId} identity={identity} isClient={isClient} initialChannel={initialChannel} initialMessageId={initialMessageId} members={members} onError={onError} />
       </div>
 
       <section className="flex h-[min(600px,70vh)] flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -61,3 +55,6 @@ export function ConversationPanel({ accessToken, projectId, identity, isClient, 
     </div>
   )
 }
+
+
+

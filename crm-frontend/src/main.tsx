@@ -6,7 +6,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import './index.css'
 
 import { routeTree } from './routeTree.gen'
-import { bindSessionStorageSync, bootstrapSession, useSessionStore } from './auth/session-store'
+import { bindSessionStorageSync, bootstrapSession, useSessionStore } from './app/session/session-store'
 
 const queryClient = new QueryClient({
   defaultOptions: {

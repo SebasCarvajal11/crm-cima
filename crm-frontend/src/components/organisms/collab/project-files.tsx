@@ -1,16 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Download, FolderOpen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { listProjectFilesEnrichedRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectFileEnriched } from '@/collab/collab.types'
-
-const fmtSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+import { useProjectFiles } from '@/features/collab/hooks'
+import { downloadGatewayFile, formatFileSize } from '@/features/collab/utils'
 
 type Props = {
   accessToken: string
@@ -20,11 +12,7 @@ type Props = {
 /** Organismo: tabla de archivos del proyecto con informacion enriquecida de tarea y fase. */
 export function ProjectFiles({ accessToken, projectId }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null)
-  const filesQ = useQuery({
-    queryKey: collabKeys.files(projectId),
-    queryFn:  () => listProjectFilesEnrichedRequest(accessToken, projectId),
-  })
-  const files = (filesQ.data?.data.items ?? []) as ProjectFileEnriched[]
+  const { filesQ, files } = useProjectFiles({ accessToken, projectId })
 
   if (filesQ.isLoading) {
     return (
@@ -47,19 +35,7 @@ export function ProjectFiles({ accessToken, projectId }: Props) {
   const openDownload = async (fileId: string, fileName: string) => {
     try {
       setBusyId(fileId)
-      const res = await fetch(`/api/files/${fileId}/download`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-      if (!res.ok) throw new Error(`No se pudo descargar (${res.status})`)
-      const blob = await res.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(objectUrl)
+      await downloadGatewayFile(accessToken, fileId, fileName)
     } catch (error) {
       console.error(error)
     } finally {
@@ -89,7 +65,7 @@ export function ProjectFiles({ accessToken, projectId }: Props) {
                   <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{f.description}</p>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {f.mimeType} · {fmtSize(f.sizeBytes)}
+                  {f.mimeType} · {formatFileSize(f.sizeBytes)}
                 </p>
               </td>
               <td className="px-4 py-3 hidden sm:table-cell">

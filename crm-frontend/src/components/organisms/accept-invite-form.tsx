@@ -1,20 +1,13 @@
-﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+﻿import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FormField } from '@/components/molecules/form-field'
-import {
-  acceptInviteRequest,
-  getInvitationPreviewRequest,
-} from '@/auth/auth-api'
-import { parseApiError } from '@/auth/parse-api-error'
-import { useSessionStore } from '@/auth/session-store'
-import { strongPasswordSchema } from '@/auth/schemas/password.schema'
+import { useAcceptInviteFlow } from '@/features/auth/hooks'
+import { strongPasswordSchema } from '@/features/auth/model'
 
 const schema = z
   .object({
@@ -34,30 +27,7 @@ type AcceptInviteFormProps = {
 
 /** Organismo: aceptar invitacion y fijar contrasena inicial (gateway). */
 export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const setSession = useSessionStore((s) => s.setSession)
-
-  const previewQuery = useQuery({
-    queryKey: ['invite-preview', token],
-    queryFn: () => getInvitationPreviewRequest(token),
-    retry: false,
-  })
-
-  const mutation = useMutation({
-    mutationFn: async (body: Values) => {
-      try {
-        return await acceptInviteRequest({ token, password: body.password })
-      } catch (e) {
-        throw new Error(await parseApiError(e), { cause: e })
-      }
-    },
-    onSuccess: (data) => {
-      setSession(data.data.access_token)
-      void queryClient.invalidateQueries()
-      navigate({ to: '/dashboard' })
-    },
-  })
+  const { previewQuery, mutation } = useAcceptInviteFlow(token)
 
   const {
     register,
@@ -91,7 +61,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
   const email = previewQuery.data?.data.email
 
   return (
-    <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+    <form onSubmit={handleSubmit((v) => mutation.mutate({ password: v.password }))} className="space-y-4">
       {email ? (
         <p className="text-sm text-muted-foreground">
           Invitacion para{' '}
@@ -111,7 +81,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
         </Alert>
       ) : null}
       <Button type="submit" className="w-full" disabled={mutation.isPending}>
-        {mutation.isPending ? 'Activando…' : 'Activar cuenta'}
+        {mutation.isPending ? 'Activando...' : 'Activar cuenta'}
       </Button>
     </form>
   )

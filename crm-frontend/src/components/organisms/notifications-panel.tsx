@@ -3,8 +3,8 @@ import { MessageSquare, RefreshCw } from 'lucide-react'
 import {
   listUnreadMentionNotificationsRequest,
   markMentionNotificationSeenRequest,
-} from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
+} from '@/features/collab/api'
+import { collabKeys } from '@/features/collab/model'
 import { Button } from '@/components/ui/button'
 
 type Props = {

@@ -1,6 +1,6 @@
 ﻿import { CalendarClock, CheckCircle2, Download, Eye, File as FileIconBase, FileImage, FileText, FileVideo, GitPullRequestArrow, UserRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import type { ProjectMember, ProjectTask, ProjectTimelineItem } from '@/collab/collab.types'
+import type { ProjectMember, ProjectTask, ProjectTimelineItem } from '@/features/collab/model'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -301,3 +301,4 @@ export function ConversationFilesTimeline({ accessToken, timeline, tasks, member
     </>
   )
 }
+

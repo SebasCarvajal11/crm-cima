@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
-import { parseApiError } from '@/auth/parse-api-error'
-import { createTaskCommentRequest, listTaskCommentsRequest } from '@/collab/collab-api'
-import { collabKeys } from '@/collab/query-keys'
-import type { ProjectTaskComment } from '@/collab/collab.types'
+import { useTaskComments } from '@/features/collab/hooks'
 
 type Props = {
   accessToken: string
@@ -18,28 +14,21 @@ type Props = {
 
 /** Organismo: panel de comentarios de una tarea con feed y formulario de envio. */
 export function TaskComments({ accessToken, projectId, taskId, onError }: Props) {
-  const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const commentsQ = useQuery({
-    queryKey: collabKeys.taskComments(taskId),
-    queryFn:  () => listTaskCommentsRequest(accessToken, projectId, taskId),
+  const { commentsQ, comments, send } = useTaskComments({
+    accessToken,
+    projectId,
+    taskId,
+    content,
+    setContent,
+    onError,
   })
-  const comments = (commentsQ.data?.data ?? []) as ProjectTaskComment[]
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [comments.length])
-
-  const send = useMutation({
-    mutationFn: () => createTaskCommentRequest(accessToken, projectId, taskId, content.trim()),
-    onSuccess: () => {
-      setContent('')
-      void queryClient.invalidateQueries({ queryKey: collabKeys.taskComments(taskId) })
-    },
-    onError: (e) => parseApiError(e).then((m) => onError(m || 'No se pudo enviar el comentario')),
-  })
 
   return (
     <div className="flex flex-col gap-3 h-full">

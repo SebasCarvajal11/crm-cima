@@ -1,5 +1,5 @@
-import type { ProjectMember } from '@/collab/collab.types'
-import type { UserRole } from '@/auth/auth.types'
+import type { ProjectMember } from '@/features/collab/model'
+import type { UserRole } from '@/shared/types'
 
 const normalize = (value: string) =>
   value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -102,3 +102,6 @@ export function buildMentionSuggestions(query: string, actorRole: UserRole, memb
 
   return suggestions.slice(0, 8)
 }
+
+
+
